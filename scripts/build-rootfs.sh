@@ -62,12 +62,6 @@ echo "    installing ${#AVAIL[@]}, unavailable ${#SKIP[@]}: ${SKIP[*]:-none}"
 printf '%s\n' "${SKIP[@]}" > /root/unavailable-packages.txt
 pacman -S --noconfirm --needed "${AVAIL[@]}" || echo "WARN: some packages failed"
 
-echo "==> Creating user $USERNAME"
-useradd -m -G wheel,video,audio,input,storage -s /bin/bash "$USERNAME" 2>/dev/null || true
-echo "$USERNAME:$USERPASS" | chpasswd
-echo "root:$USERPASS" | chpasswd
-echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
-
 echo "==> Installing the omarchy package"
 # Omarchy 4 ships as a pacman package installing to /usr/share/omarchy; it is
 # not a git checkout. Ours comes from the local aarch64 repo built by
@@ -77,6 +71,12 @@ if pacman -Si omarchy >/dev/null 2>&1; then
 else
   echo "WARN: no omarchy package in local repo -- desktop will not be configured"
 fi
+
+echo "==> Creating user $USERNAME"
+useradd -m -G wheel,video,audio,input,storage -s /bin/bash "$USERNAME" 2>/dev/null || true
+echo "$USERNAME:$USERPASS" | chpasswd
+echo "root:$USERPASS" | chpasswd
+echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 
 echo "==> System configuration"
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
@@ -129,6 +129,27 @@ if command -v omarchy-apply-system >/dev/null 2>&1; then
   grep "Failed:" /root/omarchy-apply.log || echo "(none)"
 else
   echo "WARN: omarchy-apply-system not found; skipping system setup"
+fi
+
+echo "==> Provisioning the user session"
+# Home-directory setup that /etc/skel cannot seed. Must run as the user.
+if command -v omarchy-provision-user >/dev/null 2>&1; then
+  sudo -u "$USERNAME" -H bash -lc 'omarchy-provision-user --first-install' 2>&1 \
+    | tail -5 || echo "WARN: omarchy-provision-user reported errors"
+fi
+
+# Autologin. On a real Omarchy install the ISO owns this, since only it knows
+# whether the target is encrypted; our images are not, so we write it directly.
+# omarchy-settings ships the omarchy.desktop session this points at.
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/autologin.conf <<AUTOEOF
+[Autologin]
+User=$USERNAME
+Session=omarchy.desktop
+AUTOEOF
+
+if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ]; then
+  echo "WARN: omarchy.desktop session missing -- SDDM will have nothing to launch"
 fi
 
 echo "==> Generating initramfs"
