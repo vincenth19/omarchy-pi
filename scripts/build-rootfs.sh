@@ -48,7 +48,7 @@ pacman -Syu --noconfirm
 echo "==> Installing kernel and base system"
 pacman -S --noconfirm --needed \
   base "$KERNEL" linux-firmware systemd sudo openssh networkmanager \
-  git base-devel vim e2fsprogs util-linux
+  git base-devel vim e2fsprogs util-linux gptfdisk
 
 echo "==> Installing Omarchy packages available for aarch64"
 # Packages upstream lists that have no aarch64 build are handled by
@@ -174,36 +174,56 @@ echo "==> Installing first-boot filesystem expansion"
 # the root filesystem on first boot; ours must too.
 cat > /usr/local/bin/omarchy-pi-expand-root <<'EXPANDEOF'
 #!/bin/bash
+# Grow the root partition and filesystem to fill the device.
+#
+# Idempotent by design: it decides from the actual on-disk state, not from a
+# "have I run before" marker. A marker is wrong here because the image is
+# booted during release testing, which would consume the first boot and leave
+# every user's card unexpanded. Deciding from state also handles a card being
+# imaged onto a larger one later.
 set -euo pipefail
+
 root_src=$(findmnt -no SOURCE /)
 case "$root_src" in
-  /dev/mmcblk*p*) disk="${root_src%p*}"; num="${root_src##*p}" ;;
-  /dev/nvme*p*)   disk="${root_src%p*}"; num="${root_src##*p}" ;;
-  /dev/sd*|/dev/vd*) disk="${root_src%%[0-9]*}"; num="${root_src##*[a-z]}" ;;
+  /dev/mmcblk*p*|/dev/nvme*p*) disk="${root_src%p*}"; num="${root_src##*p}" ;;
+  /dev/sd*|/dev/vd*)           disk="${root_src%%[0-9]*}"; num="${root_src##*[a-z]}" ;;
   *) echo "Unrecognised root device: $root_src" >&2; exit 0 ;;
 esac
-# Extend the partition to the end of the device, then grow the filesystem.
-# ext4 supports online resize, so this needs no reboot.
+
+# Sectors the device has, versus where our partition currently ends.
+disk_sectors=$(blockdev --getsz "$disk")
+part_start=$(cat "/sys/class/block/$(basename "$root_src")/start")
+part_sectors=$(blockdev --getsz "$root_src")
+part_end=$(( part_start + part_sectors ))
+
+# GPT keeps a backup header at the end of the device; leave room for it plus
+# a little slack, and do not churn for a trivially small gain.
+slack=$(( 34 + 2048 ))
+if (( disk_sectors - part_end <= slack )); then
+  echo "Root partition already fills the device; nothing to do."
+  exit 0
+fi
+
+echo "Growing $root_src: partition ends at $part_end of $disk_sectors sectors."
+sgdisk --move-second-header "$disk" >/dev/null 2>&1 || true
 echo ",+" | sfdisk --no-reread --force -N "$num" "$disk"
 partx -u "$disk" || true
 resize2fs "$root_src"
+echo "Root filesystem now $(findmnt -no SIZE /)."
 EXPANDEOF
 chmod 755 /usr/local/bin/omarchy-pi-expand-root
 
 cat > /etc/systemd/system/omarchy-pi-expand-root.service <<'EXPANDEOF'
 [Unit]
-Description=Expand the root filesystem to fill the disk (first boot)
+Description=Expand the root filesystem to fill the disk
 DefaultDependencies=no
 After=systemd-remount-fs.service
 Before=sysinit.target
-ConditionPathExists=!/var/lib/omarchy-pi/root-expanded
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/omarchy-pi-expand-root
-ExecStartPost=/usr/bin/mkdir -p /var/lib/omarchy-pi
-ExecStartPost=/usr/bin/touch /var/lib/omarchy-pi/root-expanded
 
 [Install]
 WantedBy=sysinit.target
@@ -268,22 +288,21 @@ mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
 # indefensible. Override with ALLOW_SSH=1 when building a headless Pi.
 ALLOW_SSH="${ALLOW_SSH:-$([ "$VARIANT" = vm ] && echo 1 || echo 0)}"
 if [ "$ALLOW_SSH" = "1" ]; then
-  echo "==> Scheduling an SSH firewall rule for first boot"
+  echo "==> Scheduling the SSH firewall rule"
   # ufw cannot run here: it drives iptables, which needs NET_ADMIN, and the
-  # build container has no such capability. Defer the rule to first boot.
+  # build container has no such capability. Defer it to boot. `ufw allow` is
+  # idempotent, so this needs no run-once marker -- and a marker would be
+  # consumed by release testing before users ever see the image.
   cat > /etc/systemd/system/omarchy-pi-allow-ssh.service <<'UFWEOF'
 [Unit]
-Description=Allow SSH through the firewall (omarchy-pi, first boot only)
+Description=Allow SSH through the firewall (omarchy-pi)
 After=ufw.service
 Requires=ufw.service
-ConditionPathExists=!/var/lib/omarchy-pi/ssh-allowed
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/ufw allow ssh
-ExecStart=/usr/bin/mkdir -p /var/lib/omarchy-pi
-ExecStart=/usr/bin/touch /var/lib/omarchy-pi/ssh-allowed
 
 [Install]
 WantedBy=multi-user.target

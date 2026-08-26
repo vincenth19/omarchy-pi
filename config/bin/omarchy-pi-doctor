@@ -32,7 +32,9 @@ else
   ok "no [multilib]"
 fi
 
-if grep -q 'stable-mirror\.omarchy\.org\|pkgs\.omarchy\.org' /etc/pacman.conf 2>/dev/null; then
+# Active directives only -- the shipped config explains in comments why the
+# upstream repo is not used, and that must not read as a failure.
+if grep -vE '^\s*#' /etc/pacman.conf 2>/dev/null | grep -q 'stable-mirror\.omarchy\.org\|pkgs\.omarchy\.org'; then
   bad "an upstream x86_64 Omarchy repo is configured" \
       "omarchy and omarchy-settings are arch=any, so x86 builds could replace the ARM ones"
 else
@@ -63,11 +65,27 @@ fi
 
 echo
 echo "Storage"
+# Measure it rather than trusting a marker: the marker approach shipped images
+# that never expanded, because release testing consumed the first boot.
 root_src=$(findmnt -no SOURCE / 2>/dev/null)
-if [[ -f /var/lib/omarchy-pi/root-expanded ]]; then
-  ok "root filesystem expanded ($(findmnt -no SIZE / 2>/dev/null))"
-else
-  note "root not marked as expanded" "if the disk is larger than the root partition, space is being wasted"
+if [[ -n $root_src ]]; then
+  case "$root_src" in
+    /dev/mmcblk*p*|/dev/nvme*p*) _disk="${root_src%p*}" ;;
+    /dev/sd*|/dev/vd*)           _disk="${root_src%%[0-9]*}" ;;
+    *) _disk="" ;;
+  esac
+  if [[ -n $_disk ]]; then
+    _ds=$(blockdev --getsz "$_disk" 2>/dev/null || echo 0)
+    _ps=$(cat "/sys/class/block/$(basename "$root_src")/start" 2>/dev/null || echo 0)
+    _pl=$(blockdev --getsz "$root_src" 2>/dev/null || echo 0)
+    _unused=$(( _ds - _ps - _pl ))
+    if (( _ds > 0 && _unused > 2097152 )); then   # >1 GiB left on the table
+      note "$(( _unused / 2097152 )) GiB of the disk is unpartitioned" \
+           "run omarchy-pi-expand-root, or check why the boot-time expansion did not"
+    else
+      ok "root fills the disk ($(findmnt -no SIZE / 2>/dev/null))"
+    fi
+  fi
 fi
 
 avail=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
