@@ -48,7 +48,7 @@ pacman -Syu --noconfirm
 echo "==> Installing kernel and base system"
 pacman -S --noconfirm --needed \
   base "$KERNEL" linux-firmware systemd sudo openssh networkmanager \
-  git base-devel vim
+  git base-devel vim e2fsprogs util-linux
 
 echo "==> Installing Omarchy packages available for aarch64"
 # Packages upstream lists that have no aarch64 build are handled by
@@ -167,6 +167,49 @@ fi
 # Be explicit about booting to a desktop. sddm enables itself through an
 # Alias=display-manager.service, which is easy to mistake for "not enabled",
 # and a default target of multi-user would leave the machine at a console.
+echo "==> Installing first-boot filesystem expansion"
+# The image ships a root partition just big enough for its contents. Without
+# this, a 64 GB card would still present a ~13 GB root and fill up fast --
+# building anything sizeable runs out of space. Every Pi distribution grows
+# the root filesystem on first boot; ours must too.
+cat > /usr/local/bin/omarchy-pi-expand-root <<'EXPANDEOF'
+#!/bin/bash
+set -euo pipefail
+root_src=$(findmnt -no SOURCE /)
+case "$root_src" in
+  /dev/mmcblk*p*) disk="${root_src%p*}"; num="${root_src##*p}" ;;
+  /dev/nvme*p*)   disk="${root_src%p*}"; num="${root_src##*p}" ;;
+  /dev/sd*|/dev/vd*) disk="${root_src%%[0-9]*}"; num="${root_src##*[a-z]}" ;;
+  *) echo "Unrecognised root device: $root_src" >&2; exit 0 ;;
+esac
+# Extend the partition to the end of the device, then grow the filesystem.
+# ext4 supports online resize, so this needs no reboot.
+echo ",+" | sfdisk --no-reread --force -N "$num" "$disk"
+partx -u "$disk" || true
+resize2fs "$root_src"
+EXPANDEOF
+chmod 755 /usr/local/bin/omarchy-pi-expand-root
+
+cat > /etc/systemd/system/omarchy-pi-expand-root.service <<'EXPANDEOF'
+[Unit]
+Description=Expand the root filesystem to fill the disk (first boot)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target
+ConditionPathExists=!/var/lib/omarchy-pi/root-expanded
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/omarchy-pi-expand-root
+ExecStartPost=/usr/bin/mkdir -p /var/lib/omarchy-pi
+ExecStartPost=/usr/bin/touch /var/lib/omarchy-pi/root-expanded
+
+[Install]
+WantedBy=sysinit.target
+EXPANDEOF
+systemctl enable omarchy-pi-expand-root.service 2>/dev/null || echo "WARN: could not enable root expansion"
+
 echo "==> Setting graphical.target as the default"
 systemctl set-default graphical.target 2>/dev/null || ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target
 
