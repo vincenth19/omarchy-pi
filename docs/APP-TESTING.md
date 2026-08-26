@@ -53,18 +53,28 @@ Two things the earlier Pi guides warned about did **not** reproduce:
 
 | Package | Result |
 |---|---|
-| **Ghostty** | Not in Arch Linux ARM's repos. Arch's own package declares `arch=(x86_64 aarch64 i686)`, so it is buildable — see below |
+| **Ghostty** | **Built and installed for aarch64.** Set as the default terminal via `omarchy install terminal ghostty`; Super+Return opens it with the active Omarchy theme |
 
-### Ghostty on aarch64
+![Ghostty](images/app-ghostty.png)
+*Ghostty 1.3.1 built for aarch64, running btop with Omarchy's theme.*
 
-Two problems, neither of them ARM incompatibilities:
+### What it took
 
-1. `ghostty-git` (AUR) pins `zig<0.16.0`, but Arch Linux ARM ships zig 0.16.0.
-   A stale version constraint in the AUR package, not a port issue.
-2. Arch's stable `ghostty` PKGBUILD builds fine on aarch64 once `pandoc-cli`
-   is dropped from `makedepends` and `-Demit-docs` from the build flags —
-   pandoc is a Haskell package with no aarch64 build, and it is only used to
-   generate man pages.
+Ghostty is not in Arch Linux ARM's repositories, but Arch's own package
+declares `arch=(x86_64 aarch64 i686)`. Three fixes, none of them ARM code
+problems — full recipe and a working PKGBUILD in
+[pkgbuilds/ghostty/](../pkgbuilds/ghostty/):
+
+1. **Zig version.** Ghostty 1.3.1 needs Zig 0.15.2; Arch Linux ARM ships
+   0.16.0, which fails at comptime. The same mismatch is why AUR's
+   `ghostty-git` (pinned `zig<0.16.0`) refuses to build. Zig publishes
+   official aarch64 builds, so use 0.15.2 directly.
+2. **pandoc.** `pandoc-cli` is x86_64-only and has no aarch64 build anywhere
+   (Haskell toolchain). It is only used for man pages — but in `--system`
+   mode Ghostty defaults `emit_docs` to true, so it must be turned off
+   explicitly with `-Demit-docs=false`.
+3. **A stale prefetch.** `fetch-zig-cache.sh` fetches `uucode-0.1.0` while
+   `build.zig.zon` wants `0.2.0`; fetch and unpack the right one first.
 
 ## Caveats
 
