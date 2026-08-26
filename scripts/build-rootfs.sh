@@ -122,7 +122,10 @@ echo "==> Running Omarchy system setup"
 # run_logged traps per-script failures instead of aborting, so this completes
 # even where x86-specific steps do not apply; the log is what we grade.
 if command -v omarchy-apply-system >/dev/null 2>&1; then
-  SYSTEMD_OFFLINE=1 OMARCHY_LOG_TO_STDOUT=1 \
+  # OMARCHY_MIRROR=pi is load-bearing: post-install/pacman.sh restores
+  # /etc/pacman.conf from default/pacman/pacman-$OMARCHY_MIRROR.conf, and the
+  # default 'stable' variant would replace our ARM config with x86 mirrors.
+  SYSTEMD_OFFLINE=1 OMARCHY_LOG_TO_STDOUT=1 OMARCHY_MIRROR=pi \
     omarchy-apply-system --install-user "$USERNAME" --first-install 2>&1 \
     | tee /root/omarchy-apply.log | grep -E "Starting:|Failed:|Completed:" || true
   echo "--- steps that failed ---"
@@ -154,6 +157,13 @@ fi
 
 echo "==> Generating initramfs"
 mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
+
+echo "==> Verifying pacman config survived post-install"
+if grep -q "multilib\|stable-mirror.omarchy.org" /etc/pacman.conf; then
+  echo "WARN: x86 pacman config was restored -- reapplying the Pi variant"
+  cp /config/pacman/pacman-pi.conf /etc/pacman.conf
+  cp /config/pacman/mirrorlist-pi  /etc/pacman.d/mirrorlist
+fi
 
 echo "==> Restoring pacman sandbox"
 sed -i '/^DisableSandbox$/d' /etc/pacman.conf
