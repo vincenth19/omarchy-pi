@@ -164,6 +164,12 @@ if [ -f /keys/id_omarchy.pub ]; then
   install -m 600 -o "$USERNAME" -g "$USERNAME" /keys/id_omarchy.pub "/home/$USERNAME/.ssh/authorized_keys"
 fi
 
+# Be explicit about booting to a desktop. sddm enables itself through an
+# Alias=display-manager.service, which is easy to mistake for "not enabled",
+# and a default target of multi-user would leave the machine at a console.
+echo "==> Setting graphical.target as the default"
+systemctl set-default graphical.target 2>/dev/null || ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target
+
 echo "==> Provisioning the user session"
 # Home-directory setup that /etc/skel cannot seed. Must run as the user.
 if command -v omarchy-provision-user >/dev/null 2>&1; then
