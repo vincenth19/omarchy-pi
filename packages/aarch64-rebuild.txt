@@ -8,7 +8,6 @@ omacalc
 omacut
 omarchy-nvim
 omawrite
-pinta
 tensaku
 tobi-try
 ttf-ia-writer

@@ -18,7 +18,11 @@ mkdir -p "$WORK/out"
 
 echo "### Stage 1: build rootfs ($VARIANT)"
 docker rm -f omarchy-rootfs >/dev/null 2>&1 || true
+# Persistent package cache: a rebuild otherwise re-downloads several GB.
+docker volume create omarchy-pi-pacman-cache >/dev/null
+
 docker run --name omarchy-rootfs --platform linux/arm64 \
+  -v omarchy-pi-pacman-cache:/var/cache/pacman/pkg \
   -v "$ROOT/scripts:/scripts:ro" \
   -v "$ROOT/config:/config:ro" \
   -v "$OMARCHY:/omarchy:ro" \
