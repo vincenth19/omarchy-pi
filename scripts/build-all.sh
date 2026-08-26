@@ -21,9 +21,14 @@ docker rm -f omarchy-rootfs >/dev/null 2>&1 || true
 # Persistent package cache: a rebuild otherwise re-downloads several GB.
 docker volume create omarchy-pi-pacman-cache >/dev/null
 
+# Snapshot the scripts rather than bind-mounting them live. bash reads a script
+# incrementally as it executes, so editing one mid-run corrupts that run.
+SNAP="$WORK/.scripts"
+rm -rf "$SNAP" && cp -r "$ROOT/scripts" "$SNAP"
+
 docker run --name omarchy-rootfs --platform linux/arm64 \
   -v omarchy-pi-pacman-cache:/var/cache/pacman/pkg \
-  -v "$ROOT/scripts:/scripts:ro" \
+  -v "$SNAP:/scripts:ro" \
   -v "$ROOT/config:/config:ro" \
   -v "$OMARCHY:/omarchy:ro" \
   -v "$WORK/out:/pkgs:ro" \
@@ -35,7 +40,7 @@ docker export omarchy-rootfs -o "$WORK/rootfs.tar"
 
 echo "### Stage 3: assemble image"
 docker run --rm --platform linux/arm64 \
-  -v "$ROOT/scripts:/scripts:ro" \
+  -v "$SNAP:/scripts:ro" \
   -v "$ROOT/config:/config:ro" \
   -v "$WORK:/work" \
   -e VARIANT="$VARIANT" \
