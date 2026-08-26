@@ -33,6 +33,10 @@ sed -i '0,/^\[options\]/s//[options]\nDisableSandbox/' /etc/pacman.conf
 mkdir -p "$LOCAL_REPO"
 if compgen -G "/pkgs/*.pkg.tar.*" > /dev/null; then
   cp /pkgs/*.pkg.tar.* "$LOCAL_REPO"/
+  # Drop any same-named copy from the shared pacman cache. Rebuilt packages
+  # keep their version-release, so pacman would happily install a stale cached
+  # tarball and silently ignore the rebuild.
+  for p in /pkgs/*.pkg.tar.*; do rm -f "/var/cache/pacman/pkg/$(basename "$p")"; done
   ( cd "$LOCAL_REPO" && repo-add -q omarchy-pi.db.tar.gz ./*.pkg.tar.* )
 else
   echo "WARN: no prebuilt packages in /pkgs; omarchy-pi repo will be empty"
