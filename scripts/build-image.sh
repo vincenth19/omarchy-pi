@@ -26,9 +26,17 @@ ESP=/tmp/esp.img
 dd if=/dev/zero of="$ESP" bs=1M count="$ESP_MB" status=none
 mkfs.vfat -F32 -n OMARCHYPI "$ESP" >/dev/null
 
-KERNEL_IMG=$(ls "$ROOTFS"/boot/Image* 2>/dev/null | head -1)
+# Kernel naming differs by variant: the generic aarch64 kernel installs
+# /boot/Image, while linux-rpi installs /boot/kernel8.img for the Pi firmware.
+if [ "$VARIANT" = "vm" ]; then
+  KERNEL_IMG=$(ls "$ROOTFS"/boot/Image 2>/dev/null | head -1)
+  [ -n "$KERNEL_IMG" ] || { echo "No /boot/Image in $ROOTFS -- is linux-aarch64 installed?" >&2; exit 1; }
+else
+  KERNEL_IMG=$(ls "$ROOTFS"/boot/kernel*.img 2>/dev/null | head -1)
+  [ -n "$KERNEL_IMG" ] || { echo "No /boot/kernel*.img in $ROOTFS -- is linux-rpi installed?" >&2; exit 1; }
+  [ -d "$ROOTFS/boot/overlays" ] || echo "WARN: /boot/overlays missing; the V3D overlay will not load"
+fi
 INITRAMFS=$(ls "$ROOTFS"/boot/initramfs-*.img 2>/dev/null | grep -v fallback | head -1)
-[ -n "$KERNEL_IMG" ] || { echo "No kernel found in $ROOTFS/boot" >&2; exit 1; }
 echo "    kernel:    $(basename "$KERNEL_IMG")"
 echo "    initramfs: $(basename "${INITRAMFS:-none}")"
 
