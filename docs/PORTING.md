@@ -41,8 +41,8 @@ on the [`pi5` branch](https://github.com/vincenth19/omarchy/tree/pi5).
 |---|---|---|
 | `bundled Node.js tarball missing` on first install | `install/user/mise-work.sh` globs `node-v*-linux-x64.tar.gz` unconditionally | Derive the suffix from `uname -m` |
 | Install step dies before doing anything | `install/hardware/apple/fix-spi-keyboard.sh` reads `/sys/class/dmi/id/product_name`; the Pi has no DMI, so the assignment fails under `bash -eE` | `\|\| true` on the read |
-| `Hook 'btrfs-overlayfs' cannot be found` | `omarchy_hooks.conf` HOOKS ends in a hook shipped by the Limine/snapper stack we do not install | Drop it from HOOKS |
-| `module not found: 'thunderbolt'` | `thunderbolt_module.conf` adds a module the Pi kernel lacks | Add it only when `modinfo` finds it |
+| `Hook 'btrfs-overlayfs' cannot be found` | `omarchy_hooks.conf` HOOKS ends in a hook shipped by the Limine/snapper stack we do not install | Removed by our additive drop-in, not by editing their file |
+| `module not found: 'thunderbolt'` | `thunderbolt_module.conf` adds a module the Pi kernel lacks | Removed by our additive drop-in |
 | `snapper.sh` exits 127 | snapper is not installed on this port | Skip when the binary is absent |
 | pacman left pointing at x86 mirrors | `post-install/pacman.sh` restores `default/pacman/pacman-$OMARCHY_MIRROR.conf`, defaulting to `stable` (Omarchy's Arch mirror has no aarch64 tree, and `[multilib]` does not exist for ARM) | Add a `pi` mirror variant and set `OMARCHY_MIRROR=pi` |
 
@@ -65,6 +65,12 @@ on the [`pi5` branch](https://github.com/vincenth19/omarchy/tree/pi5).
 
 Re-verify the third group against current Omarchy and Mesa before carrying the
 workaround forward — some may already be fixed upstream.
+
+## Keeping upstream updates safe
+
+How the port avoids letting an Omarchy release break a user's Pi — the
+three tiers of patching and the release gate — is in
+[ADAPTER.md](ADAPTER.md).
 
 ## Update workflow
 

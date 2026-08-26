@@ -234,6 +234,12 @@ if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ]; then
   echo "WARN: omarchy.desktop session missing -- SDDM will have nothing to launch"
 fi
 
+echo "==> Installing the omarchy-pi initramfs drop-in"
+# Additive: sorts after Omarchy's own drop-ins and adjusts the arrays, so an
+# upstream rewrite of their files cannot break us and we never conflict on a
+# file we do not own.
+install -Dm644 /config/mkinitcpio/zz-omarchy-pi.conf /etc/mkinitcpio.conf.d/zz-omarchy-pi.conf
+
 echo "==> Configuring a generic initramfs"
 # mkinitcpio's `autodetect` hook trims modules to the hardware of the machine
 # doing the build. We build in a container, so it would drop exactly the
