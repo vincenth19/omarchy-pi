@@ -65,9 +65,5 @@ assert_grep 'btrfs-overlayfs' "$DROPIN" "drop-in handles btrfs-overlayfs"
 # ${arr[@]/pattern} substitutes an empty string instead of removing the
 # element; mkinitcpio then fails with "Hook '"'"''"'"' cannot be found". Removal must
 # rebuild the array.
-if grep -Eq '\$\{(HOOKS|MODULES)\[@\]/' "$DROPIN"; then
-  bad "drop-in removes entries by rebuilding the array" \
-      "\${arr[@]/pattern} leaves empty elements that break mkinitcpio"
-else
-  ok "drop-in removes entries by rebuilding the array"
-fi
+assert_no_grep_active '\$\{(HOOKS|MODULES)\[@\]/' "$DROPIN" \
+  "drop-in removes entries by rebuilding the array"

@@ -19,13 +19,8 @@ assert_no_grep '^\[multilib\]' "$CONF" "no [multilib] section"
 
 # omarchy and omarchy-settings are arch=any. If an upstream x86_64 repo were
 # configured, pacman could satisfy them from there and replace our builds.
-# Check active directives only -- comments legitimately mention the upstream
-# repo when explaining why it is not used.
-if grep -vE '^\s*#' "$CONF" | grep -Eq 'pkgs\.omarchy\.org|stable-mirror\.omarchy\.org'; then
-  bad "no upstream x86_64 Omarchy repo configured" "an active Server line points at upstream"
-else
-  ok "no upstream x86_64 Omarchy repo configured"
-fi
+assert_no_grep_active 'pkgs\.omarchy\.org|stable-mirror\.omarchy\.org' "$CONF" \
+  "no upstream x86_64 Omarchy repo configured"
 
 # Our repo must be the only Omarchy-ish repo, and must exist.
 assert_grep '^\[omarchy-pi\]' "$CONF" "our [omarchy-pi] repo is present"

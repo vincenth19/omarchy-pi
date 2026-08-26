@@ -22,5 +22,19 @@ assert_no_grep() {
   else ok "$3"; fi
 }
 
+# Comment-aware variants. Config files and scripts routinely *mention* the
+# thing they must not do -- in a comment explaining why. Matching raw text
+# turns those explanations into false failures, so strip comments first.
+_active() { grep -vE '^[[:space:]]*#' "$1" 2>/dev/null; }
+
+assert_grep_active() {
+  if _active "$2" | grep -Eq "$1"; then ok "$3"
+  else bad "$3" "expected /$1/ in the active (non-comment) lines of $2"; fi
+}
+assert_no_grep_active() {
+  if _active "$2" | grep -Eq "$1"; then bad "$3" "unexpected /$1/ in the active lines of $2"
+  else ok "$3"; fi
+}
+
 finish() { exit $(( _fail > 0 ? 1 : 0 )); }
 trap finish EXIT
