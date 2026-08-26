@@ -42,8 +42,16 @@ jobs:
             -e PACKAGES="$(tr '\n' ' ' < packages/aarch64-rebuild.txt)" \
             alarm-build bash /scripts/build-pkgs.sh
 
+      # Cheapest gate first: seconds, no Docker, catches policy and config
+      # regressions before anything expensive runs.
+      - name: Tests (fast)
+        run: ./test/run.sh
+
       - name: Verify the patch series still applies to latest stable
         run: ./scripts/sync-upstream.sh
+
+      - name: Tests (container)
+        run: ./test/run.sh container
 
       - name: Build image
         env:
