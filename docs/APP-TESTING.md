@@ -49,32 +49,30 @@ Two things the earlier Pi guides warned about did **not** reproduce:
 
 ## Installing extra software
 
-`omarchy-pkg-add` is repository-only, and `yay` is available for the AUR.
+`omarchy-pkg-add` (used by `omarchy install ...`) is repository-only, and `yay`
+is available for the AUR.
 
 | Package | Result |
 |---|---|
-| **Ghostty** | **Built and installed for aarch64.** Set as the default terminal via `omarchy install terminal ghostty`; Super+Return opens it with the active Omarchy theme |
+| **Ghostty** | **Not available on ARM.** Not in Arch Linux ARM's repositories, and the AUR package will not build |
 
-![Ghostty](images/app-ghostty.png)
-*Ghostty 1.3.1 built for aarch64, running btop with Omarchy's theme.*
+### Why Ghostty does not install
 
-### What it took
+`omarchy install terminal ghostty` fails because nothing provides a Ghostty
+package for aarch64:
 
-Ghostty is not in Arch Linux ARM's repositories, but Arch's own package
-declares `arch=(x86_64 aarch64 i686)`. Three fixes, none of them ARM code
-problems — full recipe and a working PKGBUILD in
-[pkgbuilds/ghostty/](../pkgbuilds/ghostty/):
+- Arch ships `ghostty` in `extra` for **x86_64 only**; Arch Linux ARM has no
+  build of it, so `pacman -S ghostty` finds nothing.
+- AUR's `ghostty-git` pins `zig<0.16.0`, and Arch Linux ARM ships Zig 0.16.0,
+  so `yay` refuses to build it.
 
-1. **Zig version.** Ghostty 1.3.1 needs Zig 0.15.2; Arch Linux ARM ships
-   0.16.0, which fails at comptime. The same mismatch is why AUR's
-   `ghostty-git` (pinned `zig<0.16.0`) refuses to build. Zig publishes
-   official aarch64 builds, so use 0.15.2 directly.
-2. **pandoc.** `pandoc-cli` is x86_64-only and has no aarch64 build anywhere
-   (Haskell toolchain). It is only used for man pages — but in `--system`
-   mode Ghostty defaults `emit_docs` to true, so it must be turned off
-   explicitly with `-Demit-docs=false`.
-3. **A stale prefetch.** `fetch-zig-cache.sh` fetches `uucode-0.1.0` while
-   `build.zig.zon` wants `0.2.0`; fetch and unpack the right one first.
+This is a packaging gap, not an ARM code problem — Arch's own PKGBUILD declares
+`arch=(x86_64 aarch64 i686)`. It becomes installable the normal Omarchy way as
+soon as an aarch64 build is published, either by Arch Linux ARM or by this
+project's own package repo (phase 6).
+
+The same reasoning applies to any other package missing on ARM: the fix is to
+publish a proper aarch64 build, not to hand-patch a one-off local build.
 
 ## Caveats
 
