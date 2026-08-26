@@ -278,7 +278,14 @@ fi
 grep -E '^(HOOKS|MODULES)=' /etc/mkinitcpio.conf
 
 echo "==> Generating initramfs"
-mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
+# Keep the full log: mkinitcpio's summary line only says "errors were
+# encountered", and truncating the output hides which hook or module caused it.
+if mkinitcpio -P > /tmp/mkinitcpio.log 2>&1; then
+  echo "    initramfs built cleanly"
+else
+  echo "WARN: mkinitcpio reported problems:"
+  grep -aE '^==> (ERROR|WARNING)|error:' /tmp/mkinitcpio.log | head -20 | sed 's/^/      /'
+fi
 
 # Omarchy's firewall is "allow nothing in, everything out" (install/config/
 # firewall.sh). That is the right default for a laptop and it is why the first

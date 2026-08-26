@@ -60,4 +60,14 @@ case "$(basename "$DROPIN")" in
   zz-*) ok "drop-in sorts after Omarchy's own drop-ins" ;;
   *)    bad "drop-in sorts after Omarchy's own drop-ins" "name it zz-* or it loads too early" ;;
 esac
-assert_grep 'HOOKS=\("\$\{HOOKS\[@\]/btrfs-overlayfs\}"\)' "$DROPIN" "drop-in strips btrfs-overlayfs"
+assert_grep 'btrfs-overlayfs' "$DROPIN" "drop-in handles btrfs-overlayfs"
+
+# ${arr[@]/pattern} substitutes an empty string instead of removing the
+# element; mkinitcpio then fails with "Hook '"'"''"'"' cannot be found". Removal must
+# rebuild the array.
+if grep -Eq '\$\{(HOOKS|MODULES)\[@\]/' "$DROPIN"; then
+  bad "drop-in removes entries by rebuilding the array" \
+      "\${arr[@]/pattern} leaves empty elements that break mkinitcpio"
+else
+  ok "drop-in removes entries by rebuilding the array"
+fi
