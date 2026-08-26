@@ -216,15 +216,34 @@ mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
 # indefensible. Override with ALLOW_SSH=1 when building a headless Pi.
 ALLOW_SSH="${ALLOW_SSH:-$([ "$VARIANT" = vm ] && echo 1 || echo 0)}"
 if [ "$ALLOW_SSH" = "1" ]; then
-  echo "==> Opening SSH in the firewall"
-  ufw allow ssh || echo "WARN: could not add ufw rule for ssh"
+  echo "==> Scheduling an SSH firewall rule for first boot"
+  # ufw cannot run here: it drives iptables, which needs NET_ADMIN, and the
+  # build container has no such capability. Defer the rule to first boot.
+  cat > /etc/systemd/system/omarchy-pi-allow-ssh.service <<'UFWEOF'
+[Unit]
+Description=Allow SSH through the firewall (omarchy-pi, first boot only)
+After=ufw.service
+Requires=ufw.service
+ConditionPathExists=!/var/lib/omarchy-pi/ssh-allowed
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/ufw allow ssh
+ExecStart=/usr/bin/mkdir -p /var/lib/omarchy-pi
+ExecStart=/usr/bin/touch /var/lib/omarchy-pi/ssh-allowed
+
+[Install]
+WantedBy=multi-user.target
+UFWEOF
+  systemctl enable omarchy-pi-allow-ssh.service 2>/dev/null || echo "WARN: could not enable ssh firewall unit"
 else
   echo "==> Leaving SSH closed (Omarchy default); build with ALLOW_SSH=1 to open it"
 fi
 
 echo "==> Verifying pacman config survived post-install"
 if grep -q "multilib\|stable-mirror.omarchy.org" /etc/pacman.conf; then
-  echo "WARN: x86 pacman config was restored -- reapplying the Pi variant"
+  echo "    post-install restored the x86 config; reapplying the Pi variant"
   cp /config/pacman/pacman-pi.conf /etc/pacman.conf
   cp /config/pacman/mirrorlist-pi  /etc/pacman.d/mirrorlist
 fi
