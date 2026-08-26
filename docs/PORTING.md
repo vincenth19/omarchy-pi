@@ -32,15 +32,39 @@ from Arch Linux ARM. The rest:
 
 ## Known Pi/ARM gotchas
 
-| Issue | Cause | Fix |
-|---|---|---|
-| Fractional scaling breaks waybar/rendering | Pi's V3D Mesa driver mishandles the render-high-then-downsample path | Integer scaling only: `monitor = ..., scale, 1` (or 2) |
-| `hyprlock` crashes | ARM/driver issue in the release build | Use `hyprlock-git` |
-| Chromium unstable on ARM | Library mismatches | Brave or Firefox as default browser |
-| Limine bootloader + btrfs snapshot layer | Pi boots via its own firmware reading a FAT partition, no UEFI/Limine | Skip entirely; Pi-native boot config instead |
-| Some x86_64-only packages | No aarch64 build exists | Substitute or build from source (see omarchy-arm-fixes and the UTM build script for the known list) |
+### Found and fixed in this port
 
-Re-verify each of these against current Omarchy stable + current Mesa before carrying the workaround forward — some may be fixed upstream.
+These were hit while getting Omarchy 4.0.1 to install on aarch64. Each is fixed
+on the [`pi5` branch](https://github.com/vincenth19/omarchy/tree/pi5).
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `bundled Node.js tarball missing` on first install | `install/user/mise-work.sh` globs `node-v*-linux-x64.tar.gz` unconditionally | Derive the suffix from `uname -m` |
+| Install step dies before doing anything | `install/hardware/apple/fix-spi-keyboard.sh` reads `/sys/class/dmi/id/product_name`; the Pi has no DMI, so the assignment fails under `bash -eE` | `\|\| true` on the read |
+| `Hook 'btrfs-overlayfs' cannot be found` | `omarchy_hooks.conf` HOOKS ends in a hook shipped by the Limine/snapper stack we do not install | Drop it from HOOKS |
+| `module not found: 'thunderbolt'` | `thunderbolt_module.conf` adds a module the Pi kernel lacks | Add it only when `modinfo` finds it |
+| `snapper.sh` exits 127 | snapper is not installed on this port | Skip when the binary is absent |
+| pacman left pointing at x86 mirrors | `post-install/pacman.sh` restores `default/pacman/pacman-$OMARCHY_MIRROR.conf`, defaulting to `stable` (Omarchy's Arch mirror has no aarch64 tree, and `[multilib]` does not exist for ARM) | Add a `pi` mirror variant and set `OMARCHY_MIRROR=pi` |
+
+### Build-environment traps (not Omarchy bugs)
+
+| Symptom | Cause |
+|---|---|
+| Kernel panics with no root device | `mkinitcpio`'s `autodetect` hook trims modules to the *build* machine's hardware. Generic images must not autodetect |
+| A rebuilt package has no effect | pacman installs the stale cached tarball, since a rebuild keeps the same version-release. Evict it from the cache first |
+| Package build killed while linking | Docker Desktop's 4 GB default. Not an ARM issue — raise the memory or build with `JOBS=1` |
+| Script dies mid-run with a syntax error | bash reads scripts incrementally; editing a mounted script while a container runs it corrupts that run. `build-all.sh` snapshots them |
+
+### Expected on real hardware (not yet verified)
+
+| Issue | Mitigation |
+|---|---|
+| Fractional scaling breaks rendering (black waybar) | Integer scaling only — see [config/hypr/monitors.conf](../config/hypr/monitors.conf) |
+| `hyprlock` reported to crash on ARM | Use `hyprlock-git` if it reproduces |
+| Chromium unstable on ARM | Brave or Firefox |
+
+Re-verify the third group against current Omarchy and Mesa before carrying the
+workaround forward — some may already be fixed upstream.
 
 ## Update workflow
 
