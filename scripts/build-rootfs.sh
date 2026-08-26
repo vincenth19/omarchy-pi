@@ -155,6 +155,20 @@ if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ]; then
   echo "WARN: omarchy.desktop session missing -- SDDM will have nothing to launch"
 fi
 
+echo "==> Configuring a generic initramfs"
+# mkinitcpio's `autodetect` hook trims modules to the hardware of the machine
+# doing the build. We build in a container, so it would drop exactly the
+# drivers the target needs -- virtio_blk in the VM, the SD/MMC stack on the Pi
+# -- and the kernel would panic with no root device. Generic images must not
+# autodetect.
+sed -i 's/^HOOKS=(\(.*\)autodetect \(.*\))$/HOOKS=(\1\2)/' /etc/mkinitcpio.conf
+if [ "$VARIANT" = "vm" ]; then
+  sed -i 's/^MODULES=.*/MODULES=(virtio virtio_pci virtio_blk virtio_net virtio_gpu)/' /etc/mkinitcpio.conf
+else
+  sed -i 's/^MODULES=.*/MODULES=(mmc_block sdhci sdhci_pci sdhci_iproc bcm2835_dma)/' /etc/mkinitcpio.conf
+fi
+grep -E '^(HOOKS|MODULES)=' /etc/mkinitcpio.conf
+
 echo "==> Generating initramfs"
 mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
 
