@@ -9,9 +9,17 @@ set -euo pipefail
 ROOTFS="${ROOTFS:-/rootfs}"
 OUT="${OUT:-/out/omarchy-pi.img}"
 VARIANT="${VARIANT:-vm}"
-ROOT_MB="${ROOT_MB:-12288}"
+ROOT_MB="${ROOT_MB:-auto}"
 ESP_MB="${ESP_MB:-512}"
 ESP_START_MB=1
+
+# Size the root partition from the actual rootfs plus headroom, so the image
+# is neither truncated nor needlessly huge to download.
+if [ "$ROOT_MB" = "auto" ]; then
+  USED_MB=$(du -sm "$ROOTFS" | cut -f1)
+  ROOT_MB=$(( USED_MB * 13 / 10 + 1024 ))
+  echo "==> rootfs ${USED_MB}M -> root partition ${ROOT_MB}M"
+fi
 
 echo "==> Building ESP (${ESP_MB}M)"
 ESP=/tmp/esp.img
