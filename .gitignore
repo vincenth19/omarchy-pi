@@ -1,0 +1,10 @@
+# Build outputs
+*.img
+*.img.xz
+*.qcow2
+*.zip
+work/
+out/
+
+# Local scratch
+.DS_Store
