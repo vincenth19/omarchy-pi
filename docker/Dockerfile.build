@@ -1,0 +1,6 @@
+FROM alarm-work
+RUN useradd -m -G wheel builder && \
+    echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel && \
+    pacman -S --noconfirm git go rust cargo nodejs npm unzip jq >/dev/null
+USER builder
+WORKDIR /home/builder

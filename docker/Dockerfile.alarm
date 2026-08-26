@@ -1,0 +1,7 @@
+FROM menci/archlinuxarm:base-devel
+# Docker blocks pacman's Landlock sandbox and the alpm download user.
+# DisableSandbox must land inside [options]; appending puts it in the last
+# repo section, where pacman ignores it and warns on every invocation.
+RUN sed -i 's/^#\?DownloadUser/#DownloadUser/' /etc/pacman.conf && \
+    sed -i '0,/^\[options\]/s//[options]\nDisableSandbox/' /etc/pacman.conf
+RUN pacman -Syu --noconfirm && pacman -S --noconfirm git base-devel sudo

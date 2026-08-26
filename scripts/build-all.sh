@@ -16,6 +16,10 @@ mkdir -p "$WORK/out"
 [ -d "$PKGS_REPO" ] || { echo "Missing $PKGS_REPO (git clone omacom-io/omarchy-pkgs)" >&2; exit 1; }
 [ -d "$OMARCHY" ]   || { echo "Missing $OMARCHY (clone of our omarchy fork)" >&2; exit 1; }
 
+echo "### Stage 0: container images"
+docker build --quiet --platform linux/arm64 -t alarm-work  -f docker/Dockerfile.alarm  docker/ >/dev/null
+docker build --quiet --platform linux/arm64 -t alarm-build -f docker/Dockerfile.build docker/ >/dev/null
+
 echo "### Stage 1: build rootfs ($VARIANT)"
 docker rm -f omarchy-rootfs >/dev/null 2>&1 || true
 # Persistent package cache: a rebuild otherwise re-downloads several GB.

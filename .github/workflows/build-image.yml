@@ -30,8 +30,8 @@ jobs:
 
       - name: Build base images
         run: |
-          docker build --platform linux/arm64 -t alarm-work  -f work/Dockerfile.alarm work/
-          docker build --platform linux/arm64 -t alarm-build -f work/Dockerfile.build work/
+          docker build --platform linux/arm64 -t alarm-work  -f docker/Dockerfile.alarm docker/
+          docker build --platform linux/arm64 -t alarm-build -f docker/Dockerfile.build docker/
 
       - name: Build aarch64 packages
         run: |
