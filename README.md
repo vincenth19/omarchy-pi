@@ -21,7 +21,7 @@ A ready-to-flash SD card image (`.img.xz`, flashable with Raspberry Pi Imager) t
 |---|---|
 | **This repo** | Docs, image build tooling, Pi-specific configs, CI |
 | [`vincenth19/omarchy`](https://github.com/vincenth19/omarchy) (`pi5` branch) | Fork of `basecamp/omarchy`: upstream stable tag + a few Pi/ARM patch commits, rebased on each upstream release |
-| aarch64 package repo *(planned)* | Omarchy's build system [supports aarch64 but only publishes x86_64 today](https://github.com/omacom-io/omarchy-pkgs), so we'll build and host the ARM packages ourselves |
+| aarch64 packages | [pkgbuilds/](pkgbuilds/) plus rebuilds of 23 packages upstream ships x86_64-only. Currently baked into the image; hosting them as a public repo (so installed systems get updates) is the next milestone |
 
 ## What works today
 
@@ -39,10 +39,16 @@ portability bugs, kept as a small patch series on the `pi5` branch and
 
 ## Approach
 
-- Base: **Arch Linux ARM** with the `linux-rpi` kernel (Pi 5)
-- Omarchy installed from our `pi5` fork branch; updates = upstream tag + rebase
-- Bootloader: Pi firmware boot (Omarchy's Limine/snapshot layer doesn't apply to Pi)
-- Validation happens first in a native aarch64 UTM VM on Apple Silicon, building on [ggalancs/omarchy-arm-utm](https://github.com/basecamp/omarchy/discussions/7956)
+- Base: **Arch Linux ARM**, with `linux-rpi` on the Pi and the generic
+  `linux-aarch64` kernel for the VM image
+- Omarchy is installed as a **pacman package** (that is how Omarchy 4 ships),
+  rebuilt for aarch64 from our `pi5` branch. Updates mean rebasing the patch
+  series on the new upstream tag and rebuilding — see
+  [the update workflow](docs/PORTING.md#update-workflow)
+- Boot: Pi firmware boot on hardware, systemd-boot in the VM. Omarchy's
+  Limine + btrfs-snapshot layer assumes PC-style UEFI and does not apply
+- Images are built in native aarch64 containers on Apple Silicon — no emulation
+- Prior ARM work that informed this: [ggalancs/omarchy-arm-utm](https://github.com/basecamp/omarchy/discussions/7956)
 
 ## Hardware target
 
