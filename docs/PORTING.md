@@ -2,12 +2,33 @@
 
 ## Phases
 
-1. **UTM validation (current).** Build the native aarch64 Omarchy 4 VM on Apple Silicon using [omarchy-arm-utm](https://github.com/basecamp/omarchy/discussions/7956). Proves the ARM userspace: which packages exist in Arch Linux ARM repos, which need source builds, what the installer assumes about x86.
-2. **Patch set.** Turn the findings into commits on the `pi5` branch of our `basecamp/omarchy` fork. Keep it minimal — prefer user-config overrides over editing core files.
-3. **Manual Pi 5 install.** Arch Linux ARM + `linux-rpi` kernel on a real Pi 5, install from the `pi5` branch, fight the GPU (see gotchas below). Document every step.
-4. **Scripted install.** One script that takes a fresh Arch Linux ARM Pi 5 system to full Omarchy.
-5. **Image releases.** CI builds a flashable `.img.xz` (GitHub Actions can build aarch64 images via qemu binfmt). Publish on GitHub Releases; flashable with Raspberry Pi Imager.
-6. **aarch64 package repo.** Omarchy's [package build system](https://github.com/omacom-io/omarchy-pkgs) supports aarch64 but only x86_64 is published. Host our own pacman repo (GitHub Releases or Pages) so Pi users get binary updates instead of compiling.
+| # | Phase | Status |
+|---|---|---|
+| 1 | Establish the aarch64 build environment (Docker, native arm64 on Apple Silicon) | done |
+| 2 | Determine package availability and rebuild what upstream ships x86_64-only | done — 23 built, see below |
+| 3 | Build a bootable VM image and run Omarchy's own installer on ARM | in progress |
+| 4 | Verify on real Pi 5 hardware (GPU, firmware boot, thermals) | not started |
+| 5 | Automated image releases via CI | scaffolded ([workflow](../.github/workflows/build-image.yml)) |
+| 6 | Host an aarch64 pacman repo so installed systems get package updates | not started |
+
+### Package findings (Omarchy 4.0.1)
+
+Of the 148 packages in `install/omarchy-base.packages`, 122 install directly
+from Arch Linux ARM. The rest:
+
+- **19 rebuilt** from [omarchy-pkgs](https://github.com/omacom-io/omarchy-pkgs)
+  PKGBUILDs. Most already declared `aarch64`; the rest needed only an `arch=`
+  addition, not code changes.
+- **4 core packages** built separately: `omarchy`, `omarchy-settings`,
+  `omarchy-keyring`, `ttf-jetbrains-mono-nerd-basic`. The `omarchy` package is
+  `arch=any` but hard-depends on the Limine bootloader stack, so we build a
+  [patched PKGBUILD](../pkgbuilds/omarchy/PKGBUILD).
+- **`nvim`** needs nothing — Arch Linux ARM's `neovim` already provides it.
+- **6 dropped** on the `pi5` branch: `asdcontrol`, `qemu-user-static-binfmt`
+  (x86-only, no Pi relevance) and `dotnet-runtime`, `pinta`, `obs-studio`,
+  `obsidian` (no aarch64 build). None are needed for the desktop.
+- **`herdr`** builds on ARM but gets OOM-killed while linking under Docker
+  Desktop's default 4 GB. Not an architecture problem — it needs more memory.
 
 ## Known Pi/ARM gotchas
 
