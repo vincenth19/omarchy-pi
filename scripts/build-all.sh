@@ -30,7 +30,13 @@ docker volume create omarchy-pi-pacman-cache >/dev/null
 SNAP="$WORK/.scripts"
 rm -rf "$SNAP" && cp -r "$ROOT/scripts" "$SNAP"
 
+# Keypair for the automated smoke test (scripts/smoke-test.sh).
+if [ ! -f "$WORK/id_omarchy" ]; then
+  ssh-keygen -q -t ed25519 -N '' -C omarchy-pi-smoke -f "$WORK/id_omarchy"
+fi
+
 docker run --name omarchy-rootfs --platform linux/arm64 \
+  -v "$WORK:/keys:ro" \
   -v omarchy-pi-pacman-cache:/var/cache/pacman/pkg \
   -v "$SNAP:/scripts:ro" \
   -v "$ROOT/config:/config:ro" \

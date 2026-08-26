@@ -134,6 +134,14 @@ else
   echo "WARN: omarchy-apply-system not found; skipping system setup"
 fi
 
+# Test key for automated smoke tests. Only injected when the caller mounts one;
+# release images built without it are password-only.
+if [ -f /keys/id_omarchy.pub ]; then
+  echo "==> Installing smoke-test SSH key"
+  install -d -m 700 -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.ssh"
+  install -m 600 -o "$USERNAME" -g "$USERNAME" /keys/id_omarchy.pub "/home/$USERNAME/.ssh/authorized_keys"
+fi
+
 echo "==> Provisioning the user session"
 # Home-directory setup that /etc/skel cannot seed. Must run as the user.
 if command -v omarchy-provision-user >/dev/null 2>&1; then
