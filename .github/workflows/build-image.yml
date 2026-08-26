@@ -1,0 +1,64 @@
+name: Build image
+
+# Builds the flashable Pi image and attaches it to a GitHub Release.
+# Runs on GitHub's native arm64 runners, so package builds are not emulated.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Image variant'
+        type: choice
+        options: [pi, vm]
+        default: pi
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch source repos
+        run: |
+          git clone --depth 1 https://github.com/omacom-io/omarchy-pkgs.git ../omarchy-pkgs
+          git clone --depth 1 -b pi5 https://github.com/vincenth19/omarchy.git ../omarchy
+
+      - name: Build base images
+        run: |
+          docker build --platform linux/arm64 -t alarm-work  -f work/Dockerfile.alarm work/
+          docker build --platform linux/arm64 -t alarm-build -f work/Dockerfile.build work/
+
+      - name: Build aarch64 packages
+        run: |
+          mkdir -p work/out
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD/../omarchy-pkgs/pkgbuilds:/pkgbuilds:ro" \
+            -v "$PWD/work/out:/out" -v "$PWD/scripts:/scripts:ro" \
+            -e PACKAGES="$(tr '\n' ' ' < packages/aarch64-rebuild.txt)" \
+            alarm-build bash /scripts/build-pkgs.sh
+
+      - name: Build image
+        env:
+          VARIANT: ${{ inputs.variant || 'pi' }}
+        run: ./scripts/build-all.sh
+
+      - name: Compress
+        run: |
+          xz -T0 -6 work/out/omarchy-pi.img
+          sha256sum work/out/omarchy-pi.img.xz > work/out/omarchy-pi.img.xz.sha256
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            work/out/omarchy-pi.img.xz
+            work/out/omarchy-pi.img.xz.sha256
+          body: |
+            Flash with Raspberry Pi Imager (choose "Use custom" and select the .img.xz).
+
+            Default login: `omarchy` / `omarchy` — change it on first boot.

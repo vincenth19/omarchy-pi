@@ -66,10 +66,15 @@ echo "$USERNAME:$USERPASS" | chpasswd
 echo "root:$USERPASS" | chpasswd
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 
-echo "==> Installing Omarchy from $OMARCHY_REPO ($OMARCHY_REF)"
-install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
-git clone --depth 1 -b "$OMARCHY_REF" "$OMARCHY_REPO" "/home/$USERNAME/.local/share/omarchy"
-chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.local"
+echo "==> Installing the omarchy package"
+# Omarchy 4 ships as a pacman package installing to /usr/share/omarchy; it is
+# not a git checkout. Ours comes from the local aarch64 repo built by
+# build-pkgs.sh (upstream publishes x86_64 only).
+if pacman -Si omarchy >/dev/null 2>&1; then
+  pacman -S --noconfirm --needed omarchy || echo "WARN: omarchy package failed to install"
+else
+  echo "WARN: no omarchy package in local repo -- desktop will not be configured"
+fi
 
 echo "==> System configuration"
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
@@ -90,6 +95,19 @@ export SYSTEMD_OFFLINE=1
 for svc in NetworkManager sshd; do
   systemctl enable "$svc" 2>/dev/null || echo "WARN: could not enable $svc"
 done
+
+echo "==> Running Omarchy system setup"
+# run_logged traps per-script failures instead of aborting, so this completes
+# even where x86-specific steps do not apply; the log is what we grade.
+if command -v omarchy-apply-system >/dev/null 2>&1; then
+  SYSTEMD_OFFLINE=1 OMARCHY_LOG_TO_STDOUT=1 \
+    omarchy-apply-system --install-user "$USERNAME" --first-install 2>&1 \
+    | tee /root/omarchy-apply.log | grep -E "Starting:|Failed:|Completed:" || true
+  echo "--- steps that failed ---"
+  grep "Failed:" /root/omarchy-apply.log || echo "(none)"
+else
+  echo "WARN: omarchy-apply-system not found; skipping system setup"
+fi
 
 echo "==> Generating initramfs"
 mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
