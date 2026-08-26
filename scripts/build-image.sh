@@ -55,16 +55,16 @@ EOF
   } > /tmp/omarchy.conf
   mcopy -i "$ESP" /tmp/omarchy.conf ::/loader/entries/omarchy.conf
 else
-  # Raspberry Pi boots its own firmware off the FAT partition; no UEFI.
-  mcopy -i "$ESP" "$KERNEL_IMG" ::/kernel8.img
-  [ -n "$INITRAMFS" ] && mcopy -i "$ESP" "$INITRAMFS" ::/initramfs-linux.img
-  for f in "$ROOTFS"/boot/*.dtb; do [ -e "$f" ] && mcopy -i "$ESP" "$f" ::/ ; done
-  if [ -d "$ROOTFS/boot/overlays" ]; then
-    mmd -i "$ESP" ::/overlays
-    for f in "$ROOTFS"/boot/overlays/*; do mcopy -i "$ESP" "$f" ::/overlays/ ; done
-  fi
-  [ -f /config/boot/config.txt ]  && mcopy -i "$ESP" /config/boot/config.txt  ::/config.txt
-  [ -f /config/boot/cmdline.txt ] && mcopy -i "$ESP" /config/boot/cmdline.txt ::/cmdline.txt
+  # Raspberry Pi boots its own firmware off the FAT partition; no UEFI, no
+  # bootloader. linux-rpi pulls in raspberrypi-bootloader and
+  # firmware-raspberrypi, which drop start*.elf, fixup*.dat, the bcm2712
+  # device trees and overlays/ into /boot -- the firmware needs all of it, so
+  # mirror the whole tree rather than cherry-picking the kernel.
+  ( cd "$ROOTFS/boot" && mcopy -i "$ESP" -s -b ./* ::/ )
+
+  # Our config.txt/cmdline.txt override whatever the packages shipped.
+  [ -f /config/boot/config.txt ]  && mcopy -i "$ESP" -o /config/boot/config.txt  ::/config.txt
+  [ -f /config/boot/cmdline.txt ] && mcopy -i "$ESP" -o /config/boot/cmdline.txt ::/cmdline.txt
 fi
 
 echo "==> Building ext4 root (${ROOT_MB}M)"

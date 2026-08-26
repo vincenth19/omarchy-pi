@@ -54,7 +54,9 @@ echo "==> Installing Omarchy packages available for aarch64"
 mapfile -t WANT < <(grep -hv '^#' /omarchy/install/omarchy-base.packages | grep -v '^$')
 AVAIL=(); SKIP=()
 for p in "${WANT[@]}"; do
-  if pacman -Si "$p" >/dev/null 2>&1; then AVAIL+=("$p"); else SKIP+=("$p"); fi
+  # --print resolves `provides` too, so e.g. `nvim` is satisfied by `neovim`.
+  # A plain `pacman -Si` lookup misses those and understates availability.
+  if pacman -S --print-format '%n' "$p" >/dev/null 2>&1; then AVAIL+=("$p"); else SKIP+=("$p"); fi
 done
 echo "    installing ${#AVAIL[@]}, unavailable ${#SKIP[@]}: ${SKIP[*]:-none}"
 printf '%s\n' "${SKIP[@]}" > /root/unavailable-packages.txt
@@ -95,6 +97,26 @@ export SYSTEMD_OFFLINE=1
 for svc in NetworkManager sshd; do
   systemctl enable "$svc" 2>/dev/null || echo "WARN: could not enable $svc"
 done
+
+if [ "$VARIANT" = "vm" ]; then
+  echo "==> Enabling software rendering (VM has no real GPU)"
+  # QEMU's virtio-gpu exposes a DRM device but no usable GL acceleration.
+  # Without this Hyprland fails to pick a renderer and the session never
+  # starts. The Pi variant must NOT get this -- it has a real V3D GPU.
+  mkdir -p /etc/environment.d
+  cat > /etc/environment.d/90-omarchy-pi-softrender.conf <<'ENVEOF'
+LIBGL_ALWAYS_SOFTWARE=1
+WLR_RENDERER_ALLOW_SOFTWARE=1
+ENVEOF
+  # environment.d covers the user session; SDDM and the compositor are started
+  # by systemd units that read this too.
+  mkdir -p /etc/systemd/system/sddm.service.d
+  cat > /etc/systemd/system/sddm.service.d/softrender.conf <<'ENVEOF'
+[Service]
+Environment=LIBGL_ALWAYS_SOFTWARE=1
+Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+ENVEOF
+fi
 
 echo "==> Running Omarchy system setup"
 # run_logged traps per-script failures instead of aborting, so this completes
