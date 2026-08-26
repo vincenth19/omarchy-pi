@@ -1,0 +1,101 @@
+#!/bin/bash
+# Verify the omarchy-pi adapter's invariants on a running system.
+#
+# Each check below corresponds to something that, if it drifted, would break
+# the machine in a way that is hard to diagnose from the symptom alone.
+# Read-only: it reports, it does not repair.
+
+pass=0 fail=0 warn=0
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; pass=$((pass+1)); }
+bad()  { printf '  \033[31m✗\033[0m %s\n     %s\n' "$1" "$2"; fail=$((fail+1)); }
+note() { printf '  \033[33m!\033[0m %s\n     %s\n' "$1" "$2"; warn=$((warn+1)); }
+
+echo "omarchy-pi doctor"
+echo
+
+echo "Architecture"
+[[ $(uname -m) == aarch64 ]] \
+  && ok "running aarch64" \
+  || bad "not aarch64 ($(uname -m))" "this system is not what omarchy-pi targets"
+
+echo
+echo "Package sources"
+if grep -q '^Architecture *= *aarch64' /etc/pacman.conf 2>/dev/null; then
+  ok "pacman set to aarch64"
+else
+  bad "pacman Architecture is not aarch64" "updates will resolve against the wrong architecture"
+fi
+
+if grep -q '^\[multilib\]' /etc/pacman.conf 2>/dev/null; then
+  bad "[multilib] is enabled" "multilib is x86-only; every sync will fail"
+else
+  ok "no [multilib]"
+fi
+
+if grep -q 'stable-mirror\.omarchy\.org\|pkgs\.omarchy\.org' /etc/pacman.conf 2>/dev/null; then
+  bad "an upstream x86_64 Omarchy repo is configured" \
+      "omarchy and omarchy-settings are arch=any, so x86 builds could replace the ARM ones"
+else
+  ok "no upstream x86_64 repo configured"
+fi
+
+grep -q 'mirror\.archlinuxarm\.org' /etc/pacman.d/mirrorlist 2>/dev/null \
+  && ok "using Arch Linux ARM mirrors" \
+  || note "no Arch Linux ARM mirror found" "core/extra may not resolve"
+
+echo
+echo "Adapter files"
+if [[ -f /etc/mkinitcpio.conf.d/zz-omarchy-pi.conf ]]; then
+  ok "initramfs drop-in present"
+else
+  bad "missing /etc/mkinitcpio.conf.d/zz-omarchy-pi.conf" \
+      "the next initramfs rebuild will fail on btrfs-overlayfs or thunderbolt"
+fi
+
+# .pacnew files mean an update shipped a new version of a config we had
+# modified. Harmless until it is not; worth surfacing.
+mapfile -t pacnew < <(find /etc -name '*.pacnew' 2>/dev/null)
+if (( ${#pacnew[@]} )); then
+  note "${#pacnew[@]} .pacnew file(s) awaiting review" "${pacnew[*]:0:3}"
+else
+  ok "no unreviewed .pacnew files"
+fi
+
+echo
+echo "Storage"
+root_src=$(findmnt -no SOURCE / 2>/dev/null)
+if [[ -f /var/lib/omarchy-pi/root-expanded ]]; then
+  ok "root filesystem expanded ($(findmnt -no SIZE / 2>/dev/null))"
+else
+  note "root not marked as expanded" "if the disk is larger than the root partition, space is being wasted"
+fi
+
+avail=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
+if [[ -n $avail ]] && (( avail < 2 )); then
+  bad "only ${avail}G free on /" "updates need headroom; omarchy-update refuses below its threshold"
+else
+  ok "${avail:-?}G free on /"
+fi
+
+echo
+echo "Desktop"
+systemctl is-enabled sddm >/dev/null 2>&1 \
+  && ok "sddm enabled" \
+  || bad "sddm not enabled" "the machine will boot to a console"
+
+[[ $(systemctl get-default 2>/dev/null) == graphical.target ]] \
+  && ok "default target is graphical" \
+  || bad "default target is $(systemctl get-default 2>/dev/null)" "the desktop will not start on boot"
+
+[[ -e /dev/dri/card0 ]] \
+  && ok "DRM device present" \
+  || bad "no /dev/dri/card0" "the GPU driver did not load; Hyprland cannot start"
+
+failed=$(systemctl --failed --no-legend --no-pager 2>/dev/null | wc -l)
+(( failed == 0 )) \
+  && ok "no failed systemd units" \
+  || note "$failed failed unit(s)" "$(systemctl --failed --no-legend --no-pager 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+
+echo
+printf 'passed %d, warnings %d, failures %d\n' "$pass" "$warn" "$fail"
+(( fail == 0 ))

@@ -42,16 +42,29 @@ jobs:
             -e PACKAGES="$(tr '\n' ' ' < packages/aarch64-rebuild.txt)" \
             alarm-build bash /scripts/build-pkgs.sh
 
+      - name: Verify the patch series still applies to latest stable
+        run: ./scripts/sync-upstream.sh
+
       - name: Build image
         env:
           VARIANT: ${{ inputs.variant || 'pi' }}
         run: ./scripts/build-all.sh
+
+      # The release gate. A VM image is built and booted from the same
+      # packages, and must reach graphical.target with no failed units. If this
+      # fails nothing is published and users stay on the last good release.
+      - name: Release gate - boot a VM image and smoke-test it
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq qemu-system-arm ovmf
+          VARIANT=vm ./scripts/build-all.sh
+          FW_CODE=/usr/share/AAVMF/AAVMF_CODE.fd ./scripts/smoke-test.sh
 
       - name: Compress
         run: |
           xz -T0 -6 work/out/omarchy-pi.img
           sha256sum work/out/omarchy-pi.img.xz > work/out/omarchy-pi.img.xz.sha256
 
+      # Only reached when the gate above passed.
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:

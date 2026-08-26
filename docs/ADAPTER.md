@@ -58,6 +58,35 @@ system does nothing until a user is provisioned or hardware is re-applied.
 Keep this tier as small as possible. Every patch here is a future merge
 conflict.
 
+## Channel policy: stable tags only
+
+Upstream has a single branch, `master` — the development line. This port never
+tracks it. `scripts/sync-upstream.sh` resolves the newest tag with no
+`alpha`/`beta`/`rc` suffix and rebases the series onto that:
+
+```bash
+./scripts/sync-upstream.sh
+```
+
+Omarchy itself defines three channels (`stable`, `rc`, `edge`) in
+`default/pacman/`. The port adds a fourth variant, `pi`, built from the stable
+one. Following `rc` or `edge` would mean debugging upstream's in-flight changes
+and a Pi port at the same time.
+
+## Package policy: no third-party rebuilds
+
+The port rebuilds **only packages Omarchy itself publishes**, because upstream
+publishes them for x86_64 only and without them there is no Omarchy on ARM.
+
+It does **not** rebuild third-party software that lacks an aarch64 build.
+Ghostty was the test case: building it locally needed a pinned older Zig, a
+dependency patched out, and a hand-fix to a stale dependency cache. That is not
+something anyone wants to re-do every release. Such software is documented as
+unsupported instead.
+
+`scripts/build-pkgs.sh` enforces this — it refuses any package with no PKGBUILD
+in `omarchy-pkgs` rather than letting the maintenance burden grow quietly.
+
 ## The actual guard: the release pipeline
 
 Runtime cleverness cannot save a user from a bad package. Not shipping one can.
@@ -80,9 +109,10 @@ good one.
   expected — a silent extra patch is a silent extra liability.
 - **Upstream-fixed detection.** If a Tier 3 patch applies as a no-op, upstream
   fixed it; drop the patch instead of carrying it forever.
-- **`omarchy-pi-doctor`.** An on-device command that verifies the invariants
-  (drop-in present, pacman pointed at the aarch64 repo, no x86 mirrors, root
-  expanded) and reports drift.
+- **`omarchy-pi-doctor`** *(implemented)* — ships in the image at
+  `/usr/local/bin/omarchy-pi-doctor`. Read-only; checks architecture, pacman
+  sources, the adapter drop-in, `.pacnew` drift, free space, root expansion,
+  the default target, the DRM device and failed units.
 - **Repo precedence.** Our `[omarchy-pi]` repo must be listed first, and
   upstream's `[omarchy]` must not appear at all — `omarchy` and
   `omarchy-settings` are `arch=any`, so an upstream repo entry could otherwise

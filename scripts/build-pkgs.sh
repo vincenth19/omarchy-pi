@@ -18,6 +18,31 @@ if [ ${#PACKAGES[@]} -eq 0 ]; then
   echo "No PACKAGES specified" >&2; exit 1
 fi
 
+# Policy: this port rebuilds ONLY packages Omarchy itself publishes, which it
+# publishes for x86_64 only. Without them there is no Omarchy on ARM at all.
+#
+# It deliberately does NOT rebuild third-party software that lacks an aarch64
+# build. Those builds need local patches (a pinned toolchain, dependencies
+# disabled, upstream bugs worked around) that nobody wants to carry across
+# releases. If something has no aarch64 package, it is unsupported and said to
+# be unsupported -- see docs/APP-TESTING.md.
+#
+# Every name below must exist in omacom-io/omarchy-pkgs. Anything else is
+# out of scope and fails here rather than quietly becoming a maintenance
+# burden.
+for pkg in "${PACKAGES[@]}"; do
+  if [ ! -d "$PKGBUILD_DIR/$pkg" ]; then
+    cat >&2 <<POLICY
+Refusing to build '$pkg': no PKGBUILD in omarchy-pkgs.
+
+This port only rebuilds Omarchy's own packages for aarch64. Third-party
+software without an aarch64 build is out of scope -- document it as
+unsupported instead of maintaining a custom build.
+POLICY
+    exit 1
+  fi
+done
+
 # PKGBUILDs that build fine on ARM but only declare x86_64.
 patch_arch() {
   sed -i "s/^arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD

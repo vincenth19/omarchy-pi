@@ -234,6 +234,9 @@ if [ ! -f /usr/local/share/wayland-sessions/omarchy.desktop ]; then
   echo "WARN: omarchy.desktop session missing -- SDDM will have nothing to launch"
 fi
 
+echo "==> Installing omarchy-pi-doctor"
+install -Dm755 /config/bin/omarchy-pi-doctor /usr/local/bin/omarchy-pi-doctor
+
 echo "==> Installing the omarchy-pi initramfs drop-in"
 # Additive: sorts after Omarchy's own drop-ins and adjusts the arrays, so an
 # upstream rewrite of their files cannot break us and we never conflict on a
