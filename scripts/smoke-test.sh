@@ -78,8 +78,11 @@ if [ -s work/failed-units.txt ]; then sed 's/^/    /' work/failed-units.txt | he
 echo "==> Graphical session"
 run "systemctl status sddm --no-pager -n 5" | sed 's/^/    /' | head -12
 
-run "sudo poweroff" >/dev/null 2>&1 || true
-sleep 5; kill $QEMU_PID 2>/dev/null
+# The test user's sudo needs a password, which BatchMode ssh cannot supply.
+# The image is disposable and rebuilt every run, so stop QEMU directly rather
+# than weakening the shipped sudoers just to shut a test VM down.
+kill $QEMU_PID 2>/dev/null
+wait $QEMU_PID 2>/dev/null
 
 echo
 if (( fails )); then echo "SMOKE TEST: $fails check(s) FAILED"; exit 1; fi
