@@ -21,20 +21,38 @@
 
 Re-verify each of these against current Omarchy stable + current Mesa before carrying the workaround forward — some may be fixed upstream.
 
-## Update workflow (the fork)
+## Update workflow
 
-Omarchy installs itself as a git checkout at `~/.local/share/omarchy` and updates by pulling. Our checkout points at the `pi5` branch of the fork.
+**Omarchy 4 ships itself as pacman packages, not a git checkout.** The `omarchy`
+package installs to `/usr/share/omarchy`, and `omarchy-update` upgrades it from
+`pkgs.omarchy.org` — which publishes x86_64 only. So tracking upstream means
+rebuilding packages, not pulling a repo.
 
-On each upstream release:
+Two pieces:
+
+**1. Source patches** live on the `pi5` branch of our
+[omarchy fork](https://github.com/vincenth19/omarchy), based on the upstream
+stable tag. On each upstream release:
 
 ```
-git fetch upstream                  # basecamp/omarchy
-git rebase <new-stable-tag> pi5     # replay Pi patches onto new stable
-# resolve conflicts if upstream touched what we patch
+git fetch upstream --tags
+git rebase v<new-tag> pi5
 git push --force-with-lease origin pi5
 ```
 
-Users then just run Omarchy's normal update. The smaller the patch set, the more often this rebase is conflict-free.
+**2. Packages** are rebuilt from that branch for aarch64 and published to our
+own repo. The upstream PKGBUILD supports `OMARCHY_SRC=/path/to/checkout`, so we
+build the patched tree directly rather than maintaining a source fork of the
+packaging.
+
+Our `omarchy` PKGBUILD ([pkgbuilds/omarchy](../pkgbuilds/omarchy/PKGBUILD))
+drops the `limine` / `limine-mkinitcpio-hook` / `limine-snapper-sync` / `snapper`
+hard dependencies. Those assume PC-style UEFI boot and a btrfs root; the Pi
+boots from its own firmware off the FAT partition.
+
+Users then update normally — pacman pulls from our aarch64 repo instead of
+upstream's x86_64 one. That is what makes this painless for people who are not
+maintaining the port.
 
 ## Non-goals
 
