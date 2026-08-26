@@ -137,6 +137,21 @@ else
   echo "WARN: omarchy-apply-system not found; skipping system setup"
 fi
 
+echo "==> Staging the bundled Node.js tarball"
+# omarchy-provision-user --first-install runs in "iso-chroot" context and
+# expects the ISO's bundled Node tarball at /opt/packages. We are not an ISO,
+# so stage the aarch64 build ourselves rather than letting first-install fail.
+mkdir -p /opt/packages
+NODE_VER=$(curl -fsSL https://nodejs.org/dist/index.json \
+  | jq -r '[.[] | select(.lts != false)][0].version') || NODE_VER=""
+if [ -n "$NODE_VER" ] && [ "$NODE_VER" != "null" ] \
+   && curl -fsSL -o "/opt/packages/node-${NODE_VER}-linux-arm64.tar.gz" \
+        "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-arm64.tar.gz"; then
+  echo "    staged node ${NODE_VER} (arm64)"
+else
+  echo "WARN: could not stage a Node tarball; mise will fall back to the network"
+fi
+
 # Test key for automated smoke tests. Only injected when the caller mounts one;
 # release images built without it are password-only.
 if [ -f /keys/id_omarchy.pub ]; then
