@@ -24,13 +24,21 @@ esac
 echo "==> Configuring pacman (aarch64 / $VARIANT)"
 cp /config/pacman/pacman-pi.conf /etc/pacman.conf
 cp /config/pacman/mirrorlist-pi  /etc/pacman.d/mirrorlist
-grep -q '^DisableSandbox' /etc/pacman.conf || echo 'DisableSandbox' >> /etc/pacman.conf
 
-# Our locally built aarch64 packages, exposed as a pacman repo.
+# Docker blocks pacman's Landlock sandbox. Disable it for the build only --
+# it must land in [options], not appended after the last repo section --
+# and strip it again before the rootfs ships.
+sed -i '0,/^\[options\]/s//[options]\nDisableSandbox/' /etc/pacman.conf
+
+# Our locally built aarch64 packages, exposed as a pacman repo. The database
+# has to exist even when empty, or pacman -Sy fails the whole sync.
 mkdir -p "$LOCAL_REPO"
 if compgen -G "/pkgs/*.pkg.tar.*" > /dev/null; then
   cp /pkgs/*.pkg.tar.* "$LOCAL_REPO"/
   ( cd "$LOCAL_REPO" && repo-add -q omarchy-pi.db.tar.gz ./*.pkg.tar.* )
+else
+  echo "WARN: no prebuilt packages in /pkgs; omarchy-pi repo will be empty"
+  ( cd "$LOCAL_REPO" && tar -czf omarchy-pi.db.tar.gz -T /dev/null && ln -sf omarchy-pi.db.tar.gz omarchy-pi.db )
 fi
 
 pacman -Syu --noconfirm
@@ -85,5 +93,8 @@ done
 
 echo "==> Generating initramfs"
 mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
+
+echo "==> Restoring pacman sandbox"
+sed -i '/^DisableSandbox$/d' /etc/pacman.conf
 
 echo "==> Done. Kernel: $KERNEL, variant: $VARIANT"
