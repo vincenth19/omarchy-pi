@@ -61,6 +61,8 @@ docker run --rm --platform linux/arm64 \
     tar -xf /work/rootfs.tar -C /rootfs
     # Docker-injected files that must not ship in the image
     rm -f /rootfs/.dockerenv /rootfs/etc/hostname /rootfs/etc/hosts /rootfs/etc/resolv.conf
+    # Bind-mount points export as empty directories; they are build scaffolding.
+    rmdir /rootfs/config /rootfs/omarchy /rootfs/scripts /rootfs/pkgs /rootfs/keys 2>/dev/null || true
     printf "omarchy-pi\n" > /rootfs/etc/hostname
     printf "127.0.0.1 localhost\n::1 localhost\n127.0.1.1 omarchy-pi\n" > /rootfs/etc/hosts
     ln -sf /run/systemd/resolve/stub-resolv.conf /rootfs/etc/resolv.conf
