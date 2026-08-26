@@ -9,8 +9,6 @@
 set -euo pipefail
 
 VARIANT="${VARIANT:-vm}"
-OMARCHY_REF="${OMARCHY_REF:-pi5}"
-OMARCHY_REPO="${OMARCHY_REPO:-https://github.com/vincenth19/omarchy.git}"
 USERNAME="${USERNAME:-omarchy}"
 USERPASS="${USERPASS:-omarchy}"
 LOCAL_REPO="${LOCAL_REPO:-/var/cache/omarchy-pi/repo}"
@@ -83,12 +81,17 @@ ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo "omarchy-pi" > /etc/hostname
-cat > /etc/fstab <<'FSTAB'
+# Root device differs by variant: virtio disk in QEMU, SD card on the Pi.
+if [ "$VARIANT" = "vm" ]; then
+  cat > /etc/fstab <<'FSTAB'
 /dev/vda2  /      ext4  rw,relatime  0 1
 /dev/vda1  /boot  vfat  rw,relatime  0 2
 FSTAB
-if [ "$VARIANT" = "pi" ]; then
-  sed -i 's#/dev/vda#/dev/mmcblk0p#g; s#mmcblk0p1  /boot#mmcblk0p1 /boot#' /etc/fstab
+else
+  cat > /etc/fstab <<'FSTAB'
+/dev/mmcblk0p2  /      ext4  rw,relatime  0 1
+/dev/mmcblk0p1  /boot  vfat  rw,relatime  0 2
+FSTAB
 fi
 
 # Services. systemctl can't talk to a live systemd inside the container, so
