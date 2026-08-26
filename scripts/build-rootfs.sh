@@ -202,6 +202,20 @@ grep -E '^(HOOKS|MODULES)=' /etc/mkinitcpio.conf
 echo "==> Generating initramfs"
 mkinitcpio -P 2>&1 | tail -5 || echo "WARN: mkinitcpio issues"
 
+# Omarchy's firewall is "allow nothing in, everything out" (install/config/
+# firewall.sh). That is the right default for a laptop and it is why the first
+# smoke test could not reach port 22. VM images open SSH because the automated
+# tests drive them over it; Pi release images keep Omarchy's closed default,
+# since shipping a public image with SSH open on a known password would be
+# indefensible. Override with ALLOW_SSH=1 when building a headless Pi.
+ALLOW_SSH="${ALLOW_SSH:-$([ "$VARIANT" = vm ] && echo 1 || echo 0)}"
+if [ "$ALLOW_SSH" = "1" ]; then
+  echo "==> Opening SSH in the firewall"
+  ufw allow ssh || echo "WARN: could not add ufw rule for ssh"
+else
+  echo "==> Leaving SSH closed (Omarchy default); build with ALLOW_SSH=1 to open it"
+fi
+
 echo "==> Verifying pacman config survived post-install"
 if grep -q "multilib\|stable-mirror.omarchy.org" /etc/pacman.conf; then
   echo "WARN: x86 pacman config was restored -- reapplying the Pi variant"
