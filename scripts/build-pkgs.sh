@@ -32,6 +32,13 @@ for pkg in "${PACKAGES[@]}"; do
 
   grep -q "aarch64\|'any'" PKGBUILD || patch_arch
 
+  # JOBS=1 serialises compilation. Some Rust packages (herdr) get OOM-killed
+  # while linking under Docker Desktop's default 4 GB; fewer parallel rustc
+  # processes is the difference between building and being killed.
+  if [ -n "${JOBS:-}" ]; then
+    export MAKEFLAGS="-j${JOBS}" CARGO_BUILD_JOBS="$JOBS"
+  fi
+
   if makepkg -sf --noconfirm --skippgpcheck >"$LOGS/$pkg.log" 2>&1; then
     cp ./*.pkg.tar.* "$OUT/" 2>/dev/null && ok+=("$pkg") || failed+=("$pkg:nopkg")
   else
