@@ -18,7 +18,9 @@ FW_CODE="${FW_CODE:-/opt/homebrew/share/qemu/edk2-aarch64-code.fd}"
 [ -f "$KEY" ] || { echo "No smoke-test key at $KEY" >&2; exit 1; }
 
 : > "$SERIAL"
-[ -f work/efi-vars.fd ] || dd if=/dev/zero of=work/efi-vars.fd bs=1m count=64 status=none
+# Fresh varstore every run: a persisted BootOrder entry references the old
+# image's partition GUID and drops the VM into the UEFI shell.
+dd if=/dev/zero of=work/efi-vars.fd bs=1m count=64 status=none
 
 echo "==> Booting headless"
 qemu-system-aarch64 \

@@ -16,11 +16,16 @@ VARS="${VARS:-work/efi-vars.fd}"
 
 [ -f "$IMG" ] || { echo "Image not found: $IMG" >&2; exit 1; }
 
-# UEFI needs a writable variable store; edk2 expects it padded to 64M.
-if [ ! -f "$VARS" ]; then
-  mkdir -p "$(dirname "$VARS")"
-  dd if=/dev/zero of="$VARS" bs=1m count=64 status=none
-fi
+# UEFI needs a writable variable store, padded to 64M for edk2.
+#
+# Recreate it every boot rather than persisting it. A saved BootOrder entry
+# encodes the disk's PCI device path and partition GUID, both of which change
+# when the image is rebuilt or devices are added -- the stale entry then fails
+# and the firmware drops to the UEFI shell instead of booting. An empty
+# varstore makes the firmware fall back to the removable-media path
+# (\EFI\BOOT\BOOTAA64.EFI), which always matches what we wrote.
+mkdir -p "$(dirname "$VARS")"
+dd if=/dev/zero of="$VARS" bs=1m count=64 status=none
 
 ARGS=(
   -accel hvf -cpu host -machine virt,gic-version=3
