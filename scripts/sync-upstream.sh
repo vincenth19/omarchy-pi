@@ -12,6 +12,24 @@ set -euo pipefail
 OMARCHY="${OMARCHY:-$(cd "$(dirname "$0")/../../omarchy" && pwd)}"
 BRANCH="${BRANCH:-pi5}"
 
+PKGS="${PKGS_REPO:-$(cd "$(dirname "$0")/../../omarchy-pkgs" 2>/dev/null && pwd)}"
+
+# The packaging repo and the source repo are a matched pair. Syncing only the
+# source left a 4.0.1 PKGBUILD building 4.0.2 sources, and the mismatch showed
+# up as a pacman file conflict at install time rather than a build error:
+# upstream had renamed the CUPS override the PKGBUILD moves out of the package,
+# so the stale rule no longer matched and the file collided with the cups
+# package. Always move both.
+if [ -n "${PKGS:-}" ] && [ -d "$PKGS/.git" ]; then
+  echo "==> Updating omarchy-pkgs"
+  before=$(git -C "$PKGS" rev-parse --short HEAD)
+  git -C "$PKGS" pull --quiet --ff-only 2>/dev/null || echo "    (could not fast-forward; check it by hand)"
+  after=$(git -C "$PKGS" rev-parse --short HEAD)
+  [ "$before" = "$after" ] && echo "    already current ($after)" || echo "    $before -> $after"
+else
+  echo "WARN: no omarchy-pkgs checkout found; PKGBUILDs may be stale" >&2
+fi
+
 cd "$OMARCHY"
 
 echo "==> Fetching upstream tags"
@@ -73,6 +91,7 @@ fi
 
 cat <<EOF
 
-Next: rebuild and verify before publishing anything.
+Next:
+  ./scripts/patch-pkgbuild.sh    # regenerate our omarchy PKGBUILD from upstream's
   ./scripts/build-all.sh && ./scripts/smoke-test.sh
 EOF
