@@ -268,14 +268,33 @@ echo "==> Configuring a generic initramfs"
 # autodetect.
 sed -i 's/^HOOKS=(\(.*\)autodetect \(.*\))$/HOOKS=(\1\2)/' /etc/mkinitcpio.conf
 if [ "$VARIANT" = "vm" ]; then
-  sed -i 's/^MODULES=.*/MODULES=(virtio virtio_pci virtio_blk virtio_net virtio_gpu)/' /etc/mkinitcpio.conf
+  WANT_MODULES="virtio virtio_pci virtio_blk virtio_net virtio_gpu"
 else
-  # SD card plus NVMe: the Pi 5 can boot from either, and an image that only
-  # carries the MMC stack cannot mount an NVMe root. nvme and pcie-brcmstb are
-  # built into linux-rpi today (so this is belt and braces), but a modular
-  # kernel rebuild would otherwise silently lose NVMe boot.
-  sed -i 's/^MODULES=.*/MODULES=(mmc_block sdhci sdhci_pci sdhci_iproc bcm2835_dma nvme nvme_core)/' /etc/mkinitcpio.conf
+  # SD card plus NVMe: the Pi 5 can boot from either. sdhci-brcmstb is the
+  # Pi 5's SD host (bcm2712-sdhci in its DTB), sdhci-iproc the Pi 4's. All of
+  # these are built into linux-rpi today, so naming them is insurance against
+  # a modular kernel rebuild -- but the list is filtered below, because naming
+  # a module the kernel does not have at all is a hard mkinitcpio error.
+  WANT_MODULES="mmc_block sdhci sdhci_brcmstb sdhci_iproc bcm2835_dma nvme nvme_core"
 fi
+
+# Keep only modules this kernel actually has (as a loadable .ko or built in).
+# The first Pi build named sdhci_pci, which linux-rpi does not ship in any
+# form; mkinitcpio failed with "module not found" and the image was flagged
+# incomplete. Validating here turns that into a note instead of a broken image.
+KVER=$(ls /usr/lib/modules/ | head -1)
+HAVE=(); MISSING=()
+for m in $WANT_MODULES; do
+  n=${m//_/-}
+  if grep -qE "/(${m}|${n})\.ko$" "/usr/lib/modules/$KVER/modules.builtin" \
+     || find "/usr/lib/modules/$KVER" \( -name "${m}.ko*" -o -name "${n}.ko*" \) -print -quit 2>/dev/null | grep -q .; then
+    HAVE+=("$m")
+  else
+    MISSING+=("$m")
+  fi
+done
+[ ${#MISSING[@]} -eq 0 ] || echo "    note: kernel $KVER has no module named: ${MISSING[*]} (dropped)"
+sed -i "s/^MODULES=.*/MODULES=(${HAVE[*]})/" /etc/mkinitcpio.conf
 grep -E '^(HOOKS|MODULES)=' /etc/mkinitcpio.conf
 
 echo "==> Generating initramfs"

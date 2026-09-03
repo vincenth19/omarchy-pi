@@ -37,7 +37,12 @@ assert_no_grep_active 'root=/dev/' "$CL" "cmdline.txt has no hardcoded root devi
 
 # NVMe insurance: nvme is built into linux-rpi today, but a modular rebuild
 # would silently lose NVMe boot if the initramfs never names it.
-assert_grep 'MODULES=\(mmc_block.*nvme' "$RF" "Pi initramfs covers both SD and NVMe"
+assert_grep 'WANT_MODULES="mmc_block.*sdhci_brcmstb.*nvme' "$RF" "Pi initramfs names the SD (Pi 5 = sdhci_brcmstb) and NVMe stacks"
+# The first Pi build named sdhci_pci, which linux-rpi does not ship in any
+# form -- mkinitcpio errored and the image was flagged incomplete. The list
+# must be validated against the kernel, not trusted.
+assert_grep 'modules\.builtin' "$RF" "Pi initramfs module list is validated against the installed kernel"
+assert_no_grep_active 'sdhci_pci' "$RF" "no module the Pi kernel lacks is named"
 
 # The Pi variant must ship the whole of /boot: the firmware needs the BCM2712
 # device trees (including the D0 stepping) and overlays/, not just a kernel.
