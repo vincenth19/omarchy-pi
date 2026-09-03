@@ -100,9 +100,18 @@ rm -f "$OUT"
 truncate -s "${TOTAL_MB}M" "$OUT"
 sfdisk --quiet --label gpt "$OUT" <<EOF
 ${ESP_START_MB}MiB,${ESP_MB}MiB,U,*
-,,L,,uuid=${ROOT_PARTUUID}
+,,L
 EOF
-echo "    root PARTUUID: $ROOT_PARTUUID"
+# sfdisk will not accept a named uuid= field mixed into a positional line
+# (it rejects the script with "unsupported command"), so set the UUID as a
+# second step -- and then read it back. The boot entry above already embeds
+# this value; a table without it is an image that cannot find its root.
+sfdisk --quiet --part-uuid "$OUT" 2 "$ROOT_PARTUUID"
+if ! sfdisk -d "$OUT" | grep -qi "uuid=${ROOT_PARTUUID}"; then
+  echo "root PARTUUID ${ROOT_PARTUUID} was not applied to partition 2" >&2
+  exit 1
+fi
+echo "    root PARTUUID: $ROOT_PARTUUID (verified in table)"
 dd if="$ESP"  of="$OUT" bs=1M seek="$ESP_START_MB" conv=notrunc status=none
 dd if="$ROOT" of="$OUT" bs=1M seek="$(( ESP_START_MB + ESP_MB ))" conv=notrunc status=none
 
