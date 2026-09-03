@@ -1,6 +1,11 @@
 # Booting omarchy-pi from NVMe
 
-The image supports NVMe out of the box. Nothing in it is SD-specific:
+The image is built to boot from NVMe, and the NVMe boot path has been verified
+under emulation (`scripts/test-a76-nvme.sh`): the image boots from an emulated
+NVMe controller by PARTUUID on a Cortex-A76 and reaches the desktop. Real
+BCM2712 PCIe is the one part of that chain only a Pi 5 can exercise.
+
+Nothing in the image is SD-specific:
 
 - **Filesystems are mounted by label** (`LABEL=omarchy-root`, `LABEL=OMARCHYPI`),
   and the kernel finds the root by **PARTUUID**, assigned at build time. No

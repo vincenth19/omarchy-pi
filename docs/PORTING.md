@@ -6,12 +6,13 @@
 |---|---|---|
 | 1 | Establish the aarch64 build environment (Docker, native arm64 on Apple Silicon) | done |
 | 2 | Determine package availability and rebuild what upstream ships x86_64-only | done — 23 built, see below |
-| 3 | Build a bootable VM image and run Omarchy's own installer on ARM | in progress |
-| 4 | Verify on real Pi 5 hardware (GPU, firmware boot, thermals) | not started |
+| 3 | Build a bootable VM image and run Omarchy's own installer on ARM | done — 4.0.2, zero failed steps |
+| 3b | Verify the Pi boot chain as far as emulation allows (see below) | done |
+| 4 | Verify on real Pi 5 hardware (V3D GPU, firmware boot, thermals) | not started — needs a Pi |
 | 5 | Automated image releases via CI | scaffolded ([workflow](../.github/workflows/build-image.yml)) |
 | 6 | Host an aarch64 pacman repo so installed systems get package updates | not started |
 
-### Package findings (Omarchy 4.0.1)
+### Package findings (Omarchy 4.0.2)
 
 Of the 148 packages in `install/omarchy-base.packages`, 122 install directly
 from Arch Linux ARM. The rest:
@@ -29,6 +30,20 @@ from Arch Linux ARM. The rest:
   `obsidian` (no aarch64 build). None are needed for the desktop.
 - **`herdr`** builds on ARM but gets OOM-killed while linking under Docker
   Desktop's default 4 GB. Not an architecture problem — it needs more memory.
+
+### How close to a Pi 5 can we get without one?
+
+No emulator models the BCM2712: QEMU tops out at `raspi4b` (BCM2711, a
+hardwired Cortex-A72, no PCIe, no GPU), and this QEMU build has no virgl. So
+the Pi-specific risks are split across two harnesses that each cover a slice:
+
+| Harness | Models | Verified |
+|---|---|---|
+| `scripts/test-raspi4b.sh` | Pi-family SoC (BCM2711), SD controller, the real `linux-rpi` kernel + initramfs from the image | Kernel boots, SD card found (as `mmc1`), root located by **PARTUUID**, ext4 mounted rw, systemd reaches `System Initialization`. Userspace console is invisible there (QEMU cannot clock the BCM2711 PL011), so progress is read from the journal the boot writes onto the image's own root filesystem |
+| `scripts/test-a76-nvme.sh` | The Pi 5's **Cortex-A76** core (TCG), root on an emulated **NVMe** controller — the exact path an NVMe HAT takes | Boots by PARTUUID from `nvme0n1p2`; every shipped binary runs with **no illegal-instruction faults**; Hyprland and quickshell start and render; 0 failed units. `omacalc`/`omawrite` exit 134 (SIGABRT) when run with no display — Qt aborting, not an ISA fault; both run under `QT_QPA_PLATFORM=offscreen` |
+
+Not covered by anything virtual: BCM2712 peripherals, RP1, the V3D GPU driver,
+and the real firmware's `config.txt` handling. Those need the board.
 
 ## Known Pi/ARM gotchas
 
