@@ -85,18 +85,15 @@ ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo "omarchy-pi" > /etc/hostname
-# Root device differs by variant: virtio disk in QEMU, SD card on the Pi.
-if [ "$VARIANT" = "vm" ]; then
-  cat > /etc/fstab <<'FSTAB'
-/dev/vda2  /      ext4  rw,relatime  0 1
-/dev/vda1  /boot  vfat  rw,relatime  0 2
+# Mount by filesystem label, never by device node. The same image has to boot
+# from an SD card (/dev/mmcblk0p2), an NVMe SSD behind the Pi 5's PCIe slot
+# (/dev/nvme0n1p2) and a virtio disk in QEMU (/dev/vda2). Hardcoding any of
+# them means the image only boots off the medium it was built for.
+# build-image.sh sets these labels when it makes the filesystems.
+cat > /etc/fstab <<'FSTAB'
+LABEL=omarchy-root  /      ext4  rw,relatime  0 1
+LABEL=OMARCHYPI     /boot  vfat  rw,relatime  0 2
 FSTAB
-else
-  cat > /etc/fstab <<'FSTAB'
-/dev/mmcblk0p2  /      ext4  rw,relatime  0 1
-/dev/mmcblk0p1  /boot  vfat  rw,relatime  0 2
-FSTAB
-fi
 
 # Services. systemctl can't talk to a live systemd inside the container, so
 # enable offline by creating the symlinks systemd would.
@@ -273,7 +270,11 @@ sed -i 's/^HOOKS=(\(.*\)autodetect \(.*\))$/HOOKS=(\1\2)/' /etc/mkinitcpio.conf
 if [ "$VARIANT" = "vm" ]; then
   sed -i 's/^MODULES=.*/MODULES=(virtio virtio_pci virtio_blk virtio_net virtio_gpu)/' /etc/mkinitcpio.conf
 else
-  sed -i 's/^MODULES=.*/MODULES=(mmc_block sdhci sdhci_pci sdhci_iproc bcm2835_dma)/' /etc/mkinitcpio.conf
+  # SD card plus NVMe: the Pi 5 can boot from either, and an image that only
+  # carries the MMC stack cannot mount an NVMe root. nvme and pcie-brcmstb are
+  # built into linux-rpi today (so this is belt and braces), but a modular
+  # kernel rebuild would otherwise silently lose NVMe boot.
+  sed -i 's/^MODULES=.*/MODULES=(mmc_block sdhci sdhci_pci sdhci_iproc bcm2835_dma nvme nvme_core)/' /etc/mkinitcpio.conf
 fi
 grep -E '^(HOOKS|MODULES)=' /etc/mkinitcpio.conf
 

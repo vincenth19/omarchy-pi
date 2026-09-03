@@ -17,3 +17,16 @@ disable_fw_kms_setup=1
 
 # Serial console on the GPIO header, so a failed boot is still diagnosable.
 enable_uart=1
+
+# --- NVMe / PCIe (Pi 5) ---
+# The Pi 5's PCIe slot is enabled by default in current firmware, and both the
+# BCM2712 PCIe controller (pcie-brcmstb) and the NVMe driver are built into
+# linux-rpi, so an NVMe SSD on a PCIe HAT is detected with no configuration.
+#
+# Gen 3 is faster but officially unsupported and not stable on every drive or
+# cable. Uncomment to try it, and revert if the drive drops out under load:
+# dtparam=pciex1_gen=3
+#
+# Booting FROM the NVMe drive additionally needs the Pi's own bootloader to try
+# NVMe first. That lives in the Pi's SPI EEPROM, not on the card, so this image
+# cannot set it -- see docs/NVME.md.

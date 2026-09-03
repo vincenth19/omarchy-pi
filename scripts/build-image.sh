@@ -13,6 +13,14 @@ ROOT_MB="${ROOT_MB:-auto}"
 ESP_MB="${ESP_MB:-512}"
 ESP_START_MB=1
 
+# Give the root partition a known PARTUUID so the kernel can find it without
+# depending on a device node. The Pi 5 boots from SD, NVMe or USB and each
+# presents a different name (mmcblk0p2 / nvme0n1p2 / sda2); PARTUUID is
+# resolved by the kernel itself, before any initramfs runs, so one image works
+# on all of them. Must be settled before the ESP is written, since both the
+# systemd-boot entry and cmdline.txt embed it.
+ROOT_PARTUUID="${ROOT_PARTUUID:-$(uuidgen | tr 'A-Z' 'a-z')}"
+
 # Size the root partition from the actual rootfs plus headroom, so the image
 # is neither truncated nor needlessly huge to download.
 if [ "$ROOT_MB" = "auto" ]; then
@@ -59,7 +67,7 @@ EOF
     echo "title   Omarchy Pi"
     echo "linux   /Image"
     [ -n "$INITRAMFS" ] && echo "initrd  /initramfs.img"
-    echo "options root=/dev/vda2 rw console=ttyAMA0 console=tty0"
+    echo "options root=PARTUUID=${ROOT_PARTUUID} rw console=ttyAMA0 console=tty0"
   } > /tmp/omarchy.conf
   mcopy -i "$ESP" /tmp/omarchy.conf ::/loader/entries/omarchy.conf
 else
@@ -72,7 +80,14 @@ else
 
   # Our config.txt/cmdline.txt override whatever the packages shipped.
   [ -f /config/boot/config.txt ]  && mcopy -i "$ESP" -o /config/boot/config.txt  ::/config.txt
-  [ -f /config/boot/cmdline.txt ] && mcopy -i "$ESP" -o /config/boot/cmdline.txt ::/cmdline.txt
+  # cmdline.txt is generated, not copied: it must carry the PARTUUID this build
+  # just assigned. The file in config/ holds a PLACEHOLDER precisely so that a
+  # device path can never be shipped by accident -- a static root=/dev/mmcblk0p2
+  # would boot from SD only, and silently, since SD is what gets tested first.
+  if [ -f /config/boot/cmdline.txt ]; then
+    sed "s|root=[^ ]*|root=PARTUUID=${ROOT_PARTUUID}|" /config/boot/cmdline.txt > /tmp/cmdline.txt
+    mcopy -i "$ESP" -o /tmp/cmdline.txt ::/cmdline.txt
+  fi
 fi
 
 echo "==> Building ext4 root (${ROOT_MB}M)"
@@ -85,8 +100,9 @@ rm -f "$OUT"
 truncate -s "${TOTAL_MB}M" "$OUT"
 sfdisk --quiet --label gpt "$OUT" <<EOF
 ${ESP_START_MB}MiB,${ESP_MB}MiB,U,*
-,,L
+,,L,,uuid=${ROOT_PARTUUID}
 EOF
+echo "    root PARTUUID: $ROOT_PARTUUID"
 dd if="$ESP"  of="$OUT" bs=1M seek="$ESP_START_MB" conv=notrunc status=none
 dd if="$ROOT" of="$OUT" bs=1M seek="$(( ESP_START_MB + ESP_MB ))" conv=notrunc status=none
 
