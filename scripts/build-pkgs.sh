@@ -48,6 +48,10 @@ patch_arch() {
   sed -i "s/^arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
 }
 
+# The container image's package database is frozen when the image is built. Once
+# the mirrors move on, makepkg -s 404s on every build dependency it installs.
+sudo pacman -Syu --noconfirm >/dev/null
+
 ok=(); failed=()
 for pkg in "${PACKAGES[@]}"; do
   echo "==> $pkg"
