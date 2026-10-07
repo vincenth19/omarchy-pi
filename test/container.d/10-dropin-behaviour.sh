@@ -40,6 +40,10 @@ echo "$mods" | grep -q thunderbolt \
   && bad "thunderbolt removed from MODULES" "got: $mods" \
   || ok "thunderbolt removed from MODULES"
 
+echo "$hooks" | grep -qw plymouth \
+  && bad "plymouth removed (it hung the real Pi 5 boot)" "got: $hooks" \
+  || ok "plymouth removed (it hung the real Pi 5 boot)"
+
 echo "$hooks" | grep -q encrypt \
   && bad "encrypt removed (images are not LUKS)" "got: $hooks" \
   || ok "encrypt removed (images are not LUKS)"

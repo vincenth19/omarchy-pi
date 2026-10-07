@@ -47,3 +47,6 @@ assert_no_grep_active 'sdhci_pci' "$RF" "no module the Pi kernel lacks is named"
 # The Pi variant must ship the whole of /boot: the firmware needs the BCM2712
 # device trees (including the D0 stepping) and overlays/, not just a kernel.
 assert_grep 'mcopy -i "\$ESP" -s -b \./\*' "$BI" "Pi variant mirrors the whole /boot tree"
+
+# Plymouth hung the first real-hardware boot before sysinit.target.
+assert_grep 'plymouth.enable=0' "$CL" "Pi cmdline disables plymouth"
