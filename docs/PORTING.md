@@ -8,7 +8,7 @@
 | 2 | Determine package availability and rebuild what upstream ships x86_64-only | done — 23 built, see below |
 | 3 | Build a bootable VM image and run Omarchy's own installer on ARM | done — 4.0.2, zero failed steps |
 | 3b | Verify the Pi boot chain as far as emulation allows (see below) | done |
-| 4 | Verify on real Pi 5 hardware (V3D GPU, firmware boot, thermals) | not started — needs a Pi |
+| 4 | Verify on real Pi 5 hardware (V3D GPU, firmware boot, thermals) | **boots to the desktop** — Omarchy 4.0.4 from NVMe on a Pi 5 Rev 1.1: zero failed units, Hyprland on the V3D GPU (no software rendering), HDMI 1920×1080@60, root grown to 469 GB, 49 °C idle. Needed one fix: Plymouth hung boot before `sysinit.target` |
 | 5 | Automated image releases via CI | scaffolded ([workflow](../.github/workflows/build-image.yml)) |
 | 6 | Host an aarch64 pacman repo so installed systems get package updates | not started |
 
