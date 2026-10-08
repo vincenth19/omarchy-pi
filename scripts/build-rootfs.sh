@@ -98,7 +98,9 @@ FSTAB
 # Services. systemctl can't talk to a live systemd inside the container, so
 # enable offline by creating the symlinks systemd would.
 export SYSTEMD_OFFLINE=1
-for svc in NetworkManager sshd; do
+# timesyncd: the Pi has no RTC battery, so without NTP it boots to systemd's
+# built-in epoch and stays weeks behind.
+for svc in NetworkManager sshd systemd-timesyncd; do
   systemctl enable "$svc" 2>/dev/null || echo "WARN: could not enable $svc"
 done
 

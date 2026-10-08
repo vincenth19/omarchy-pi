@@ -58,3 +58,6 @@ assert_grep 'ALLOW_SSH' "$RF" "SSH exposure is explicit and variant-gated"
 
 # A known default password plus SSH open is a login for anyone on the LAN.
 assert_grep 'PasswordAuthentication no' "$RF" "SSH is key-only when a key is installed"
+
+# No RTC battery on the Pi: without NTP the first real boot ran two weeks slow.
+assert_grep 'systemd-timesyncd' "$RF" "network time sync is enabled"
